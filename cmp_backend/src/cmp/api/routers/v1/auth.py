@@ -49,8 +49,9 @@ class MfaVerifyRequest(Schema):
 
 
 class OtpRequestBody(Schema):
-    contact: Annotated[str, Field(min_length=3, max_length=255,
-                                  description="Registered email or mobile")]
+    contact: Annotated[
+        str, Field(min_length=3, max_length=255, description="Registered email or mobile")
+    ]
 
 
 class OtpVerifyBody(Schema):
@@ -136,9 +137,7 @@ async def mfa_verify(
             conn, user_uuid=principal.uuid, code=body.code, token=token
         )
 
-    set_session_cookies(
-        response, token, result["session"].csrf_token, max_age=result["max_age"]
-    )
+    set_session_cookies(response, token, result["session"].csrf_token, max_age=result["max_age"])
     return {"ok": True, "message": "Verified."}
 
 
@@ -163,9 +162,7 @@ async def otp_request(body: OtpRequestBody) -> dict[str, Any]:
 
 
 @router.post("/otp/verify", response_model=Acknowledged, summary="Data-subject sign-in")
-async def otp_verify(
-    body: OtpVerifyBody, request: Request, response: Response
-) -> dict[str, Any]:
+async def otp_verify(body: OtpVerifyBody, request: Request, response: Response) -> dict[str, Any]:
     async with transaction() as conn:
         result = await auth_service.verify_subject_otp(
             conn,
@@ -242,9 +239,7 @@ async def password_reset_confirm(body: ResetConfirm) -> dict[str, Any]:
 @router.get("/sessions", response_model=list[SessionInfo], summary="Your active sessions")
 async def list_sessions(principal: CurrentUser) -> list[dict[str, Any]]:
     live = await sessions.list_for_user(principal.user_id)
-    return [
-        {**s.to_public(), "current": s.sid == principal.session.sid} for s in live
-    ]
+    return [{**s.to_public(), "current": s.sid == principal.session.sid} for s in live]
 
 
 @router.delete(

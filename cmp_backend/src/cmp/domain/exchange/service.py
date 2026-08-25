@@ -84,12 +84,17 @@ async def generate(
         event=Event.EXPORT_GENERATED,
         entity_type="export_log",
         entity_id=export["export_id"],
-        detail={"project": project_uuid, "site": site_uuid, "type": export_type,
-                "row_count": rows, "lines": written, "sha256": digest},
+        detail={
+            "project": project_uuid,
+            "site": site_uuid,
+            "type": export_type,
+            "row_count": rows,
+            "lines": written,
+            "sha256": digest,
+        },
     )
     log.info("export.generated", type=export_type, rows=rows, lines=written)
-    return {**export, "project_uuid": project_uuid, "site_uuid": site_uuid,
-            "line_count": written}
+    return {**export, "project_uuid": project_uuid, "site_uuid": site_uuid, "line_count": written}
 
 
 async def _collection_pack(
@@ -116,14 +121,16 @@ async def _collection_pack(
             "name": project["project_name"],
             "status": project["project_status"],
         },
-        "site": {"uuid": str(site["site_uuid"]), "label": site["site_label"],
-                 "location": site["location"]},
+        "site": {
+            "uuid": str(site["site_uuid"]),
+            "label": site["site_label"],
+            "location": site["location"],
+        },
         "notice": {
             "uuid": str(notice["notice_uuid"]),
             "code": notice["notice_code"],
             "version": notice["version"],
-            "published_at": notice["published_at"].isoformat()
-            if notice["published_at"] else None,
+            "published_at": notice["published_at"].isoformat() if notice["published_at"] else None,
             "recipients_text": notice["recipients_text"],
         },
         "purposes": [
@@ -138,9 +145,15 @@ async def _collection_pack(
             for p in purposes
         ],
         "consent_links": [
-            {"uuid": str(link_["link_uuid"]), "expires_at": link_["expires_at"].isoformat(),
-             "uses_remaining": (None if link_["max_uses"] is None
-                                else max(0, link_["max_uses"] - link_["use_count"]))}
+            {
+                "uuid": str(link_["link_uuid"]),
+                "expires_at": link_["expires_at"].isoformat(),
+                "uses_remaining": (
+                    None
+                    if link_["max_uses"] is None
+                    else max(0, link_["max_uses"] - link_["use_count"])
+                ),
+            }
             for link_ in links
         ],
         "contains_personal_data": False,
@@ -158,19 +171,39 @@ async def _consented_list(
 
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow([
-        "subject_uuid", "full_name", "email", "mobile", "organization_id", "person_type",
-        "consent_uuid", "consented_at", "notice_code", "notice_version",
-        "notice_content_sha256", "granted_purposes",
-    ])
+    writer.writerow(
+        [
+            "subject_uuid",
+            "full_name",
+            "email",
+            "mobile",
+            "organization_id",
+            "person_type",
+            "consent_uuid",
+            "consented_at",
+            "notice_code",
+            "notice_version",
+            "notice_content_sha256",
+            "granted_purposes",
+        ]
+    )
     for s in subjects:
-        writer.writerow([
-            s["subject_uuid"], s["full_name"], s["email"], s["mobile"] or "",
-            s["organization_id"] or "", s["person_type"] or "",
-            s["consent_uuid"], s["affirmative_action_at"].isoformat(),
-            s["notice_code"], s["notice_version"], s["notice_content_hash"],
-            "|".join(s["granted_purposes"] or []),
-        ])
+        writer.writerow(
+            [
+                s["subject_uuid"],
+                s["full_name"],
+                s["email"],
+                s["mobile"] or "",
+                s["organization_id"] or "",
+                s["person_type"] or "",
+                s["consent_uuid"],
+                s["affirmative_action_at"].isoformat(),
+                s["notice_code"],
+                s["notice_version"],
+                s["notice_content_hash"],
+                "|".join(s["granted_purposes"] or []),
+            ]
+        )
 
     lines = [(s["auth_user_id"], s["consent_id"]) for s in subjects]
     return buf.getvalue(), len(subjects), lines
@@ -184,12 +217,8 @@ async def render(conn: Conn, export: dict[str, Any]) -> tuple[str, str, str]:
     mismatch is surfaced, not hidden, because a changed export is a changed
     disclosure.
     """
-    project = await project_repo.by_uuid(
-        conn, str(export["project_uuid"]), role="dpo", user_id=0
-    )
-    site = await project_repo.site_by_uuid(
-        conn, str(export["site_uuid"]), role="dpo", user_id=0
-    )
+    project = await project_repo.by_uuid(conn, str(export["project_uuid"]), role="dpo", user_id=0)
+    site = await project_repo.site_by_uuid(conn, str(export["site_uuid"]), role="dpo", user_id=0)
     if not project or not site:
         raise NotFound("Export source")
 
@@ -208,8 +237,7 @@ REQUIRED_COLUMNS = (
     "collected_on",
     "subject_role",
 )
-OPTIONAL_COLUMNS = ("consent_uuid", "storage_ref", "agent_ref", "site_uuid",
-                    "declared_asset_count")
+OPTIONAL_COLUMNS = ("consent_uuid", "storage_ref", "agent_ref", "site_uuid", "declared_asset_count")
 
 VALID_ASSET_TYPES = {"image", "video", "audio", "sensor", "document", "other"}
 VALID_SUBJECT_ROLES = {"consented", "incidental", "unidentified"}
@@ -231,24 +259,29 @@ def parse_manifest(raw: bytes) -> tuple[list[dict[str, str]], list[dict[str, Any
     missing = [c for c in REQUIRED_COLUMNS if c not in header]
     if missing:
         return [], [
-            {"row": 0, "field": c, "error": f"Required column '{c}' is missing"}
-            for c in missing
+            {"row": 0, "field": c, "error": f"Required column '{c}' is missing"} for c in missing
         ]
 
     unknown = sorted(header - set(REQUIRED_COLUMNS) - set(OPTIONAL_COLUMNS))
     if unknown:
-        errors.append({
-            "row": 0, "field": unknown[0],
-            "error": f"Unknown column(s): {', '.join(unknown)}",
-        })
+        errors.append(
+            {
+                "row": 0,
+                "field": unknown[0],
+                "error": f"Unknown column(s): {', '.join(unknown)}",
+            }
+        )
 
     rows: list[dict[str, str]] = []
     for i, raw_row in enumerate(reader, start=2):
         if i - 1 > MAX_MANIFEST_ROWS:
-            errors.append({
-                "row": i, "field": "file",
-                "error": f"Manifest exceeds {MAX_MANIFEST_ROWS} rows",
-            })
+            errors.append(
+                {
+                    "row": i,
+                    "field": "file",
+                    "error": f"Manifest exceeds {MAX_MANIFEST_ROWS} rows",
+                }
+            )
             break
         rows.append({k: (v or "").strip() for k, v in raw_row.items() if k})
     return rows, errors
@@ -266,58 +299,85 @@ def validate_rows(rows: Iterable[dict[str, str]]) -> list[dict[str, Any]]:
 
         asset_type = row.get("asset_type", "")
         if asset_type and asset_type not in VALID_ASSET_TYPES:
-            errors.append({
-                "row": i, "field": "asset_type",
-                "error": f"Must be one of: {', '.join(sorted(VALID_ASSET_TYPES))}",
-            })
+            errors.append(
+                {
+                    "row": i,
+                    "field": "asset_type",
+                    "error": f"Must be one of: {', '.join(sorted(VALID_ASSET_TYPES))}",
+                }
+            )
 
         subject_role = row.get("subject_role", "")
         if subject_role and subject_role not in VALID_SUBJECT_ROLES:
-            errors.append({
-                "row": i, "field": "subject_role",
-                "error": f"Must be one of: {', '.join(sorted(VALID_SUBJECT_ROLES))}",
-            })
+            errors.append(
+                {
+                    "row": i,
+                    "field": "subject_role",
+                    "error": f"Must be one of: {', '.join(sorted(VALID_SUBJECT_ROLES))}",
+                }
+            )
 
         # The rule the schema also enforces, checked here so the report names the
         # row rather than failing the whole batch on a constraint violation.
         if subject_role == "consented" and not row.get("consent_uuid"):
-            errors.append({
-                "row": i, "field": "consent_uuid",
-                "error": "A consented subject requires a consent_uuid",
-            })
+            errors.append(
+                {
+                    "row": i,
+                    "field": "consent_uuid",
+                    "error": "A consented subject requires a consent_uuid",
+                }
+            )
         if subject_role in ("incidental", "unidentified") and row.get("consent_uuid"):
-            errors.append({
-                "row": i, "field": "consent_uuid",
-                "error": f"A {subject_role} subject must not carry a consent_uuid",
-            })
+            errors.append(
+                {
+                    "row": i,
+                    "field": "consent_uuid",
+                    "error": f"A {subject_role} subject must not carry a consent_uuid",
+                }
+            )
 
         if row.get("collected_on"):
             try:
                 parsed = date.fromisoformat(row["collected_on"])
                 if parsed > datetime.now(UTC).date():
-                    errors.append({
-                        "row": i, "field": "collected_on",
-                        "error": "Collection date is in the future",
-                    })
+                    errors.append(
+                        {
+                            "row": i,
+                            "field": "collected_on",
+                            "error": "Collection date is in the future",
+                        }
+                    )
             except ValueError:
-                errors.append({
-                    "row": i, "field": "collected_on", "error": "Must be YYYY-MM-DD",
-                })
+                errors.append(
+                    {
+                        "row": i,
+                        "field": "collected_on",
+                        "error": "Must be YYYY-MM-DD",
+                    }
+                )
 
         key = (row.get("source_asset_ref", ""), row.get("consent_uuid", ""))
         if key in seen and key[0]:
-            errors.append({
-                "row": i, "field": "source_asset_ref",
-                "error": "Duplicate asset/subject pair within this file",
-            })
+            errors.append(
+                {
+                    "row": i,
+                    "field": "source_asset_ref",
+                    "error": "Duplicate asset/subject pair within this file",
+                }
+            )
         seen.add(key)
 
     return errors
 
 
 async def validate(
-    conn: Conn, *, source_uuid: str, project_uuid: str | None, raw: bytes,
-    role: str, actor_id: int,
+    conn: Conn,
+    *,
+    source_uuid: str,
+    project_uuid: str | None,
+    raw: bytes,
+    role: str,
+    actor_id: int,
 ) -> dict[str, Any]:
     """Dry run. Same parsing, same checks, nothing written."""
     source = await registry_repo.source_by_uuid(conn, source_uuid)
@@ -392,11 +452,17 @@ async def import_manifest(
 
     if errors and not rows:
         finished = await repo.finish_batch(
-            conn, batch["batch_id"], accepted=0, rejected=len(errors),
-            status="rejected", error_report=json.dumps(errors[:200]),
+            conn,
+            batch["batch_id"],
+            accepted=0,
+            rejected=len(errors),
+            status="rejected",
+            error_report=json.dumps(errors[:200]),
         )
         await audit.record(
-            conn, event=Event.IMPORT_REJECTED, entity_type="import_batch",
+            conn,
+            event=Event.IMPORT_REJECTED,
+            entity_type="import_batch",
             entity_id=batch["batch_id"],
             detail={"file": file_name, "errors": len(errors), "sha256": digest},
         )
@@ -413,18 +479,26 @@ async def import_manifest(
             continue
         try:
             await _ingest_row(
-                conn, row=row, source_id=source["source_id"],
-                project_id=project["project_id"], batch_id=batch["batch_id"],
+                conn,
+                row=row,
+                source_id=source["source_id"],
+                project_id=project["project_id"],
+                batch_id=batch["batch_id"],
             )
             accepted += 1
         except (ValidationFailed, NotFound, Conflict) as exc:
-            rejected.append({"row": i, "field": getattr(exc, "field", None) or "-",
-                             "error": exc.message})
+            rejected.append(
+                {"row": i, "field": getattr(exc, "field", None) or "-", "error": exc.message}
+            )
 
     status = "accepted" if not rejected else ("partial" if accepted else "rejected")
     finished = await repo.finish_batch(
-        conn, batch["batch_id"], accepted=accepted, rejected=len(rejected),
-        status=status, error_report=json.dumps(rejected[:200]) if rejected else None,
+        conn,
+        batch["batch_id"],
+        accepted=accepted,
+        rejected=len(rejected),
+        status=status,
+        error_report=json.dumps(rejected[:200]) if rejected else None,
     )
 
     await audit.record(
@@ -432,8 +506,13 @@ async def import_manifest(
         event=Event.IMPORT_ACCEPTED if accepted else Event.IMPORT_REJECTED,
         entity_type="import_batch",
         entity_id=batch["batch_id"],
-        detail={"file": file_name, "accepted": accepted, "rejected": len(rejected),
-                "status": status, "sha256": digest},
+        detail={
+            "file": file_name,
+            "accepted": accepted,
+            "rejected": len(rejected),
+            "status": status,
+            "sha256": digest,
+        },
     )
     log.info("import.finished", accepted=accepted, rejected=len(rejected), status=status)
 
@@ -453,12 +532,9 @@ async def _ingest_row(
 ) -> None:
     site_id = None
     if row.get("site_uuid"):
-        site = await project_repo.site_by_uuid(
-            conn, row["site_uuid"], role="dpo", user_id=0
-        )
+        site = await project_repo.site_by_uuid(conn, row["site_uuid"], role="dpo", user_id=0)
         if not site or site["project_id"] != project_id:
-            raise ValidationFailed("site_uuid is not a site of this project",
-                                   field="site_uuid")
+            raise ValidationFailed("site_uuid is not a site of this project", field="site_uuid")
         site_id = site["site_id"]
 
     collection, _ = await repo.upsert_collection(
@@ -498,9 +574,7 @@ async def _ingest_row(
         has_unmapped_subjects=subject_role != "consented",
     )
 
-    if not await repo.asset_subject_exists(
-        conn, asset_id=asset["asset_id"], consent_id=consent_id
-    ):
+    if not await repo.asset_subject_exists(conn, asset_id=asset["asset_id"], consent_id=consent_id):
         await repo.link_asset_subject(
             conn,
             asset_id=asset["asset_id"],

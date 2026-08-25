@@ -106,8 +106,18 @@ async def create(
         RETURNING id, uuid, username, full_name, email, mobile, organization_id,
                   role, person_type, status, created_at, updated_at
         """,
-        (username, full_name, email, mobile, organization_id, role, person_type,
-         status, password_hash, registered_via_link_id),
+        (
+            username,
+            full_name,
+            email,
+            mobile,
+            organization_id,
+            role,
+            person_type,
+            status,
+            password_hash,
+            registered_via_link_id,
+        ),
     )
     assert row is not None
     return row
@@ -225,9 +235,7 @@ async def list_users(
         f"SELECT u.id AS _row_id, {PUBLIC_COLUMNS} FROM auth_user u WHERE {clause}{keyset}",
         [*params, *keyset_params],
     )
-    total = await fetch_one(
-        conn, f"SELECT count(*) AS n FROM auth_user u WHERE {clause}", params
-    )
+    total = await fetch_one(conn, f"SELECT count(*) AS n FROM auth_user u WHERE {clause}", params)
     items, next_cursor = build_page(rows, req)
     return items, next_cursor, int((total or {}).get("n", 0))
 

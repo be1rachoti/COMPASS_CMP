@@ -75,46 +75,62 @@ def test_approved_cannot_go_backwards() -> None:
     for target in (S.IN_DRAFT, S.UNDER_PROCESS, S.PENDING_APPROVAL):
         for role in Role:
             with pytest.raises(TransitionNotPermitted):
-                validate(current=S.APPROVED, target=target, role=role,
-                         facts=SATISFIED, reason="r")
+                validate(current=S.APPROVED, target=target, role=role, facts=SATISFIED, reason="r")
 
 
 def test_closed_is_terminal() -> None:
     for target, role in itertools.product(S, Role):
         with pytest.raises(TransitionNotPermitted):
-            validate(current=S.CLOSED, target=target, role=role,
-                     facts=SATISFIED, reason="r")
+            validate(current=S.CLOSED, target=target, role=role, facts=SATISFIED, reason="r")
 
 
 # ------------------------------------------------------------- preconditions
 def test_publication_requires_a_notice_with_purposes() -> None:
     with pytest.raises(TransitionNotPermitted, match="no notice"):
-        validate(current=S.IN_DRAFT, target=S.UNDER_PROCESS, role=Role.DPO,
-                 facts=ProjectFacts())
+        validate(current=S.IN_DRAFT, target=S.UNDER_PROCESS, role=Role.DPO, facts=ProjectFacts())
 
     with pytest.raises(TransitionNotPermitted, match="no purposes"):
-        validate(current=S.IN_DRAFT, target=S.UNDER_PROCESS, role=Role.DPO,
-                 facts=ProjectFacts(has_notice=True))
+        validate(
+            current=S.IN_DRAFT,
+            target=S.UNDER_PROCESS,
+            role=Role.DPO,
+            facts=ProjectFacts(has_notice=True),
+        )
 
     with pytest.raises(TransitionNotPermitted, match="Rule 3"):
-        validate(current=S.IN_DRAFT, target=S.UNDER_PROCESS, role=Role.DPO,
-                 facts=ProjectFacts(has_notice=True, notice_purpose_count=1))
+        validate(
+            current=S.IN_DRAFT,
+            target=S.UNDER_PROCESS,
+            role=Role.DPO,
+            facts=ProjectFacts(has_notice=True, notice_purpose_count=1),
+        )
 
 
 def test_pending_approval_requires_proof_not_merely_an_approval() -> None:
     """INV-8: an approval row without a proof file does not unlock the transition."""
     with pytest.raises(TransitionNotPermitted, match="proof file"):
-        validate(current=S.UNDER_PROCESS, target=S.PENDING_APPROVAL, role=Role.RND_USER,
-                 facts=ProjectFacts(approval_with_proof_count=0))
+        validate(
+            current=S.UNDER_PROCESS,
+            target=S.PENDING_APPROVAL,
+            role=Role.RND_USER,
+            facts=ProjectFacts(approval_with_proof_count=0),
+        )
 
 
 def test_return_to_draft_requires_a_reason() -> None:
     for frm in (S.UNDER_PROCESS, S.PENDING_APPROVAL):
         with pytest.raises(TransitionNotPermitted, match="reason"):
-            validate(current=frm, target=S.IN_DRAFT, role=Role.DPO,
-                     facts=SATISFIED, reason="   ")
-        assert validate(current=frm, target=S.IN_DRAFT, role=Role.DPO,
-                        facts=SATISFIED, reason="Missing site list").to is S.IN_DRAFT
+            validate(current=frm, target=S.IN_DRAFT, role=Role.DPO, facts=SATISFIED, reason="   ")
+        assert (
+            validate(
+                current=frm,
+                target=S.IN_DRAFT,
+                role=Role.DPO,
+                facts=SATISFIED,
+                reason="Missing site list",
+            ).to
+            is S.IN_DRAFT
+        )
 
 
 def test_role_error_precedes_precondition_error() -> None:
@@ -125,8 +141,12 @@ def test_role_error_precedes_precondition_error() -> None:
     act on.
     """
     with pytest.raises(TransitionNotPermitted) as exc:
-        validate(current=S.PENDING_APPROVAL, target=S.APPROVED, role=Role.DCO,
-                 facts=ProjectFacts(review_recorded=False))
+        validate(
+            current=S.PENDING_APPROVAL,
+            target=S.APPROVED,
+            role=Role.DCO,
+            facts=ProjectFacts(review_recorded=False),
+        )
     assert exc.value.code == "transition_role_not_permitted"
     assert "review" not in exc.value.message.lower()
 
@@ -135,8 +155,9 @@ def test_role_error_precedes_precondition_error() -> None:
 def test_available_reports_blockers_without_hiding_the_transition() -> None:
     """The UI shows a disabled button with a reason, not a missing button."""
     view = available(S.UNDER_PROCESS, Role.RND_USER, ProjectFacts())
-    assert view == [{"to": "pending_approval", "allowed": False,
-                     "blocked_by": "No approval with a proof file"}]
+    assert view == [
+        {"to": "pending_approval", "allowed": False, "blocked_by": "No approval with a proof file"}
+    ]
 
 
 def test_available_hides_transitions_this_role_may_never_perform() -> None:

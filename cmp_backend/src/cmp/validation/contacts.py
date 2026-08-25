@@ -19,9 +19,7 @@ Email = Annotated[EmailStr, StringConstraints(max_length=255)]
 #: written with a country code, spaces or dashes. Normalising aggressively would
 #: reject numbers people actually have, and a number we cannot reach is worse
 #: than a number stored with a space in it.
-Mobile = Annotated[
-    str, StringConstraints(min_length=6, max_length=20, pattern=r"^\+?[0-9 \-]+$")
-]
+Mobile = Annotated[str, StringConstraints(min_length=6, max_length=20, pattern=r"^\+?[0-9 \-]+$")]
 
 #: Either of the above, for the sign-in form that accepts both.
 Contact = Annotated[str, StringConstraints(min_length=3, max_length=255)]

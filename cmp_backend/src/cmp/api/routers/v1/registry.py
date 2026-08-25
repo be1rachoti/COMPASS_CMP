@@ -152,11 +152,14 @@ async def create_purpose(body: PurposeIn, principal: RequireDPO) -> dict[str, An
             )
         except Exception as exc:
             if unique_violation(exc):
-                raise Conflict("That purpose code already exists",
-                               code="purpose_code_taken") from exc
+                raise Conflict(
+                    "That purpose code already exists", code="purpose_code_taken"
+                ) from exc
             raise
         await audit.record(
-            conn, event=Event.PURPOSE_CREATED, entity_type="purpose",
+            conn,
+            event=Event.PURPOSE_CREATED,
+            entity_type="purpose",
             entity_id=purpose["purpose_id"],
             detail={"purpose_code": body.purpose_code, "lawful_basis": body.lawful_basis},
         )
@@ -186,11 +189,11 @@ async def update_purpose(
                 code="purpose_not_draft",
                 details={"status": purpose["status"]},
             )
-        updated = await repo.update_purpose(
-            conn, purpose["purpose_id"], **_purpose_fields(body)
-        )
+        updated = await repo.update_purpose(conn, purpose["purpose_id"], **_purpose_fields(body))
         await audit.record(
-            conn, event=Event.PURPOSE_UPDATED, entity_type="purpose",
+            conn,
+            event=Event.PURPOSE_UPDATED,
+            entity_type="purpose",
             entity_id=purpose["purpose_id"],
         )
     return updated
@@ -206,7 +209,9 @@ async def activate_purpose(purpose_uuid: UUID, principal: RequireDPO) -> dict[st
             raise Conflict("That purpose is already active", code="purpose_active")
         await repo.set_purpose_status(conn, purpose["purpose_id"], "active")
         await audit.record(
-            conn, event=Event.PURPOSE_ACTIVATED, entity_type="purpose",
+            conn,
+            event=Event.PURPOSE_ACTIVATED,
+            entity_type="purpose",
             entity_id=purpose["purpose_id"],
         )
     return {"ok": True, "message": "Purpose activated and available to notices."}
@@ -227,15 +232,24 @@ async def retire_purpose(purpose_uuid: UUID, principal: RequireDPO) -> dict[str,
             usage = await repo.purpose_usage(conn, purpose["purpose_id"])
             raise PurposeInUse(
                 "This purpose is attached to a published notice and cannot be retired",
-                details={"notices": [
-                    {"notice_code": u["notice_code"], "version": u["version"],
-                     "project": u["project_name"], "status": u["status"]}
-                    for u in usage if u["status"] in ("published", "superseded")
-                ]},
+                details={
+                    "notices": [
+                        {
+                            "notice_code": u["notice_code"],
+                            "version": u["version"],
+                            "project": u["project_name"],
+                            "status": u["status"],
+                        }
+                        for u in usage
+                        if u["status"] in ("published", "superseded")
+                    ]
+                },
             )
         await repo.set_purpose_status(conn, purpose["purpose_id"], "retired")
         await audit.record(
-            conn, event=Event.PURPOSE_RETIRED, entity_type="purpose",
+            conn,
+            event=Event.PURPOSE_RETIRED,
+            entity_type="purpose",
             entity_id=purpose["purpose_id"],
         )
     return {"ok": True, "message": "Purpose retired. It can no longer be attached."}
@@ -253,9 +267,7 @@ async def purpose_versions(
 
 
 @router.get("/purposes/{purpose_uuid}/usage", summary="Notices referencing this purpose")
-async def purpose_usage(
-    purpose_uuid: UUID, principal: RequireDPOorAdmin
-) -> dict[str, Any]:
+async def purpose_usage(purpose_uuid: UUID, principal: RequireDPOorAdmin) -> dict[str, Any]:
     """How the UI knows retirement is blocked before the user tries."""
     async with connection() as conn:
         purpose = await repo.purpose_by_uuid(conn, str(purpose_uuid))
@@ -310,9 +322,7 @@ async def list_processors(
 ) -> dict[str, Any]:
     reject_unknown_filters(request, {"status", "q"})
     async with connection() as conn:
-        items, cursor, total = await repo.list_processors(
-            conn, page, status=processor_status, q=q
-        )
+        items, cursor, total = await repo.list_processors(conn, page, status=processor_status, q=q)
     return {"items": items, "next_cursor": cursor, "total": total}
 
 
@@ -330,7 +340,9 @@ async def create_processor(
             security_confirmed_at=body.security_confirmed_at,
         )
         await audit.record(
-            conn, event=Event.PROCESSOR_CREATED, entity_type="processor",
+            conn,
+            event=Event.PROCESSOR_CREATED,
+            entity_type="processor",
             entity_id=processor["processor_id"],
             detail={"legal_name": body.legal_name, "contract_ref": body.contract_ref},
         )
@@ -360,12 +372,16 @@ async def update_processor(
         if not processor:
             raise NotFound("Processor")
         updated = await repo.update_processor(
-            conn, processor["processor_id"],
-            legal_name=body.legal_name, contract_ref=body.contract_ref,
+            conn,
+            processor["processor_id"],
+            legal_name=body.legal_name,
+            contract_ref=body.contract_ref,
             security_confirmed_at=body.security_confirmed_at,
         )
         await audit.record(
-            conn, event=Event.PROCESSOR_UPDATED, entity_type="processor",
+            conn,
+            event=Event.PROCESSOR_UPDATED,
+            entity_type="processor",
             entity_id=processor["processor_id"],
         )
     return updated
@@ -382,7 +398,9 @@ async def suspend_processor(
             raise NotFound("Processor")
         await repo.suspend_processor(conn, processor["processor_id"])
         await audit.record(
-            conn, event=Event.PROCESSOR_SUSPENDED, entity_type="processor",
+            conn,
+            event=Event.PROCESSOR_SUSPENDED,
+            entity_type="processor",
             entity_id=processor["processor_id"],
         )
     return {"ok": True, "message": "Processor suspended. Existing records are unchanged."}
@@ -437,8 +455,12 @@ async def list_sources(
     reject_unknown_filters(request, {"status", "source_role", "processor", "q"})
     async with connection() as conn:
         items, cursor, total = await repo.list_sources(
-            conn, page, status=source_status, source_role=source_role,
-            processor_uuid=str(processor) if processor else None, q=q,
+            conn,
+            page,
+            status=source_status,
+            source_role=source_role,
+            processor_uuid=str(processor) if processor else None,
+            q=q,
         )
     return {"items": items, "next_cursor": cursor, "total": total}
 
@@ -486,15 +508,18 @@ async def create_source(
             )
         except Exception as exc:
             if unique_violation(exc):
-                raise Conflict("That source code already exists",
-                               code="source_code_taken") from exc
+                raise Conflict("That source code already exists", code="source_code_taken") from exc
             raise
 
         await audit.record(
-            conn, event=Event.SOURCE_CREATED, entity_type="data_source",
+            conn,
+            event=Event.SOURCE_CREATED,
+            entity_type="data_source",
             entity_id=source["source_id"],
-            detail={"source_code": body.source_code,
-                    "authoritative_for": body.is_authoritative_for},
+            detail={
+                "source_code": body.source_code,
+                "authoritative_for": body.is_authoritative_for,
+            },
         )
     return source
 
@@ -522,11 +547,16 @@ async def update_source(
         if not source:
             raise NotFound("Data source")
         updated = await repo.update_source(
-            conn, source["source_id"], name=body.name, id_scheme=body.id_scheme,
+            conn,
+            source["source_id"],
+            name=body.name,
+            id_scheme=body.id_scheme,
             is_authoritative_for=body.is_authoritative_for,
         )
         await audit.record(
-            conn, event=Event.SOURCE_UPDATED, entity_type="data_source",
+            conn,
+            event=Event.SOURCE_UPDATED,
+            entity_type="data_source",
             entity_id=source["source_id"],
         )
     return updated
@@ -543,7 +573,9 @@ async def suspend_source(
             raise NotFound("Data source")
         await repo.suspend_source(conn, source["source_id"])
         await audit.record(
-            conn, event=Event.SOURCE_SUSPENDED, entity_type="data_source",
+            conn,
+            event=Event.SOURCE_SUSPENDED,
+            entity_type="data_source",
             entity_id=source["source_id"],
         )
     return {"ok": True, "message": "Source suspended. Imports from it are refused."}
@@ -562,7 +594,10 @@ async def source_batches(
         if not source:
             raise NotFound("Data source")
         items, cursor, total = await exchange_repo.list_batches(
-            conn, page, role=principal.role, user_id=principal.user_id,
+            conn,
+            page,
+            role=principal.role,
+            user_id=principal.user_id,
             source_uuid=str(source_uuid),
         )
     return {"items": items, "next_cursor": cursor, "total": total}

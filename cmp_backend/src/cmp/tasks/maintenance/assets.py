@@ -80,12 +80,17 @@ def flag_unmapped_assets() -> dict[str, Any]:
                 )
                 for gap in gaps:
                     await audit.record(
-                        conn, event=Event.IMPORT_RECEIVED, entity_type="collection",
-                        entity_id=gap["collection_id"], actor_user_id=None,
-                        detail={"declared": gap["declared_asset_count"],
-                                "mapped": gap["mapped"],
-                                "unaccounted": gap["declared_asset_count"] - gap["mapped"],
-                                "detected_by": "scheduled_reconciliation"},
+                        conn,
+                        event=Event.IMPORT_RECEIVED,
+                        entity_type="collection",
+                        entity_id=gap["collection_id"],
+                        actor_user_id=None,
+                        detail={
+                            "declared": gap["declared_asset_count"],
+                            "mapped": gap["mapped"],
+                            "unaccounted": gap["declared_asset_count"] - gap["mapped"],
+                            "detected_by": "scheduled_reconciliation",
+                        },
                     )
             log.info("maintenance.reconciliation", collections_with_gaps=len(gaps))
             return {"collections_with_gaps": len(gaps)}

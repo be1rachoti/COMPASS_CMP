@@ -70,8 +70,11 @@ def expire_consent_links() -> dict[str, Any]:
                 expired = await repo.expire_due_links(conn)
                 if expired:
                     await audit.record(
-                        conn, event=Event.LINK_REVOKED, entity_type="consent_link",
-                        entity_id=0, actor_user_id=None,
+                        conn,
+                        event=Event.LINK_REVOKED,
+                        entity_type="consent_link",
+                        entity_id=0,
+                        actor_user_id=None,
                         detail={"expired_by_schedule": expired},
                     )
             log.info("maintenance.links_expired", count=expired)

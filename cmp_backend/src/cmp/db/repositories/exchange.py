@@ -128,7 +128,7 @@ async def export_lines(conn: Conn, export_id: int) -> list[Row]:
 
 
 async def disclosures_for_user(conn: Conn, user_id: int) -> list[Row]:
-    """"Who was my data shared with?" - answered from the database, not an archive."""
+    """ "Who was my data shared with?" - answered from the database, not an archive."""
     return await fetch_all(
         conn,
         """
@@ -330,8 +330,16 @@ async def upsert_collection(
         RETURNING collection_id, collection_uuid, source_collection_ref, collected_on,
                   declared_asset_count, created_at, (xmax = 0) AS created
         """,
-        (source_id, source_collection_ref, project_id, site_id, batch_id, agent_ref,
-         collected_on, declared_asset_count),
+        (
+            source_id,
+            source_collection_ref,
+            project_id,
+            site_id,
+            batch_id,
+            agent_ref,
+            collected_on,
+            declared_asset_count,
+        ),
     )
     assert row is not None
     return row, bool(row.pop("created", False))
@@ -359,8 +367,14 @@ async def upsert_asset(
         RETURNING asset_id, asset_uuid, source_asset_ref, asset_type, storage_ref,
                   has_unmapped_subjects, created_at, (xmax = 0) AS created
         """,
-        (source_id, source_asset_ref, collection_id, asset_type, storage_ref,
-         has_unmapped_subjects),
+        (
+            source_id,
+            source_asset_ref,
+            collection_id,
+            asset_type,
+            storage_ref,
+            has_unmapped_subjects,
+        ),
     )
     assert row is not None
     return row, bool(row.pop("created", False))

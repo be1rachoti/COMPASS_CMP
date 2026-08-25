@@ -51,8 +51,8 @@ class Settings(BaseSettings):
 
     # ---------------------------------------------------------------- security
     secret_key: SecretStr = SecretStr("dev-only-change-me-dev-only-change-me-32")
-    session_ttl_s: int = 60 * 60 * 8          # absolute session lifetime
-    session_idle_timeout_s: int = 60 * 30     # sliding idle timeout
+    session_ttl_s: int = 60 * 60 * 8  # absolute session lifetime
+    session_idle_timeout_s: int = 60 * 30  # sliding idle timeout
     cookie_name: str = "cmp_session"
     csrf_cookie_name: str = "cmp_csrf"
     csrf_header_name: str = "X-CSRF-Token"
@@ -103,7 +103,7 @@ class Settings(BaseSettings):
 
     # ---------------------------------------------------------------- external
     notification_email_from: str = "privacy@example.org"
-    external_http_timeout_s: float = 10.0     # never infinite — checklist §13
+    external_http_timeout_s: float = 10.0  # never infinite — checklist §13
     external_http_retries: int = 3
 
     # ------------------------------------------------------------- transports

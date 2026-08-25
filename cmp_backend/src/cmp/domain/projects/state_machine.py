@@ -217,8 +217,11 @@ def validate(
         raise TransitionNotPermitted(
             f"{r.value} may not move a project from {st.value} to {tgt.value}",
             code="transition_role_not_permitted",
-            details={"from": st.value, "to": tgt.value,
-                     "permitted_roles": sorted(a.value for a in match.actors)},
+            details={
+                "from": st.value,
+                "to": tgt.value,
+                "permitted_roles": sorted(a.value for a in match.actors),
+            },
         )
 
     if not match.allowed:

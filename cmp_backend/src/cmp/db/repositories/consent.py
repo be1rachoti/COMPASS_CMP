@@ -152,8 +152,7 @@ async def revoke_links_for_project(conn: Conn, *, project_uuid: str, actor_id: i
 async def expire_due_links(conn: Conn) -> int:
     """Scheduled sweep. Idempotent: rows already expired are not matched."""
     cur = await conn.execute(
-        "UPDATE consent_link SET status = 'expired' "
-        "WHERE status = 'active' AND expires_at <= now()"
+        "UPDATE consent_link SET status = 'expired' WHERE status = 'active' AND expires_at <= now()"
     )
     return cur.rowcount
 
@@ -236,9 +235,19 @@ async def create_artefact(
         RETURNING consent_id, consent_uuid, served_at, affirmative_action_at,
                   action_type, is_withdrawal, created_at
         """,
-        (auth_user_id, notice_id, notice_language_id, notice_content_hash, link_id,
-         served_at, affirmative_action_at, action_type, ip_address, is_withdrawal,
-         supersedes_consent_id),
+        (
+            auth_user_id,
+            notice_id,
+            notice_language_id,
+            notice_content_hash,
+            link_id,
+            served_at,
+            affirmative_action_at,
+            action_type,
+            ip_address,
+            is_withdrawal,
+            supersedes_consent_id,
+        ),
     )
     assert row is not None
     return row
@@ -402,7 +411,8 @@ async def list_for_project(
             from cmp.core.errors import UnknownFilter
 
             raise UnknownFilter(
-                f"Unknown status '{status}'", field="status",
+                f"Unknown status '{status}'",
+                field="status",
                 details={"allowed": sorted(status_sql)},
             )
         where.append(status_sql[status])
@@ -441,9 +451,7 @@ async def list_for_project(
         """,
         [*params, *kparams],
     )
-    total = await fetch_one(
-        conn, f"SELECT count(*) AS n {base_from} WHERE {clause}", params
-    )
+    total = await fetch_one(conn, f"SELECT count(*) AS n {base_from} WHERE {clause}", params)
     items, cursor = build_page(rows, req)
     return items, cursor, int((total or {}).get("n", 0))
 
@@ -600,7 +608,8 @@ async def list_all_consents(
             from cmp.core.errors import UnknownFilter
 
             raise UnknownFilter(
-                f"Unknown status {status!r}", field="status",
+                f"Unknown status {status!r}",
+                field="status",
                 details={"allowed": sorted(status_sql)},
             )
         where.append(status_sql[status])

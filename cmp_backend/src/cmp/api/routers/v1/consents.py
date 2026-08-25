@@ -188,8 +188,10 @@ async def list_all_consents(
     reject_unknown_filters(request, {"status", "project"})
     async with connection() as conn:
         items, cursor, total = await repo.list_all_consents(
-            conn, page,
-            role=principal.role, user_id=principal.user_id,
+            conn,
+            page,
+            role=principal.role,
+            user_id=principal.user_id,
             status=consent_status,
             project_uuid=str(project) if project else None,
         )
@@ -247,7 +249,9 @@ async def revoke_link(link_uuid: UUID, principal: LinkReader) -> dict[str, Any]:
         if not revoked:
             raise Conflict("That link is not active", code="link_not_active")
         await audit.record(
-            conn, event=Event.LINK_REVOKED, entity_type="consent_link",
+            conn,
+            event=Event.LINK_REVOKED,
+            entity_type="consent_link",
             entity_id=link["link_id"],
         )
     return {"ok": True, "message": "Link revoked. It no longer resolves."}
@@ -271,7 +275,8 @@ async def list_consents(
             conn, str(project_uuid), role=principal.role, user_id=principal.user_id
         )
         items, cursor, total = await repo.list_for_project(
-            conn, page,
+            conn,
+            page,
             project_id=project["project_id"],
             site_uuid=str(site) if site else None,
             status=consent_status,
@@ -302,9 +307,7 @@ async def get_consent(consent_uuid: UUID, principal: ConsentReader) -> dict[str,
 
 
 @router.get("/consents/{consent_uuid}/grants", response_model=list[GrantOut])
-async def consent_grants(
-    consent_uuid: UUID, principal: ConsentReader
-) -> list[dict[str, Any]]:
+async def consent_grants(consent_uuid: UUID, principal: ConsentReader) -> list[dict[str, Any]]:
     async with connection() as conn:
         artefact = await repo.artefact_scoped(
             conn, str(consent_uuid), role=principal.role, user_id=principal.user_id
@@ -319,9 +322,7 @@ async def consent_grants(
     response_model=list[ConsentAssetOut],
     summary="Which assets contain this person",
 )
-async def consent_assets(
-    consent_uuid: UUID, principal: ConsentReader
-) -> list[dict[str, Any]]:
+async def consent_assets(consent_uuid: UUID, principal: ConsentReader) -> list[dict[str, Any]]:
     """The reverse lookup an erasure request depends on.
 
     It is the reason `asset_consent` exists: without it, "delete everything of

@@ -40,9 +40,7 @@ def _scope_predicate(role: Role | str, user_id: int) -> tuple[str, list[Any]]:
             return "FALSE", []
 
 
-async def by_uuid(
-    conn: Conn, project_uuid: str, *, role: Role | str, user_id: int
-) -> Row | None:
+async def by_uuid(conn: Conn, project_uuid: str, *, role: Role | str, user_id: int) -> Row | None:
     pred, params = _scope_predicate(role, user_id)
     return await fetch_one(
         conn,
@@ -106,8 +104,14 @@ async def create(
         RETURNING project_id, project_uuid, project_name, internal_project_name,
                   description, requesting_team, project_status, created_at, updated_at
         """,
-        (project_name, internal_project_name, description, requesting_team,
-         created_by, dco_user_id),
+        (
+            project_name,
+            internal_project_name,
+            description,
+            requesting_team,
+            created_by,
+            dco_user_id,
+        ),
     )
     assert row is not None
     return row
@@ -237,9 +241,7 @@ async def list_projects(
         """,
         [*params, *keyset_params],
     )
-    total = await fetch_one(
-        conn, f"SELECT count(*) AS n FROM project p WHERE {clause}", params
-    )
+    total = await fetch_one(conn, f"SELECT count(*) AS n FROM project p WHERE {clause}", params)
     items, next_cursor = build_page(rows, req)
     return items, next_cursor, int((total or {}).get("n", 0))
 
@@ -375,8 +377,15 @@ async def add_approval(
         RETURNING approval_id, approval_uuid, approval_type, reference_no,
                   approved_on, proof_file_hash, uploaded_at
         """,
-        (project_id, approval_type, reference_no, approved_on, proof_file_ref,
-         proof_file_hash, uploaded_by),
+        (
+            project_id,
+            approval_type,
+            reference_no,
+            approved_on,
+            proof_file_ref,
+            proof_file_hash,
+            uploaded_by,
+        ),
     )
     assert row is not None
     return row
@@ -457,9 +466,7 @@ async def list_sites(conn: Conn, project_id: int) -> list[Row]:
     )
 
 
-async def site_by_uuid(
-    conn: Conn, site_uuid: str, *, role: Role | str, user_id: int
-) -> Row | None:
+async def site_by_uuid(conn: Conn, site_uuid: str, *, role: Role | str, user_id: int) -> Row | None:
     pred, params = _scope_predicate(role, user_id)
     return await fetch_one(
         conn,

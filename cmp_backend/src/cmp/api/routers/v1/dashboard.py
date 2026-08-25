@@ -82,8 +82,12 @@ async def _rnd(conn: Any, user_id: int) -> dict[str, Any]:
            FROM project WHERE created_by = %s ORDER BY updated_at DESC LIMIT 10""",
         (user_id,),
     )
-    return {"role": "rnd_user", "counts": _ints(counts),
-            "queues": [{"name": "Needs your action", "items": queue}], "recent": recent}
+    return {
+        "role": "rnd_user",
+        "counts": _ints(counts),
+        "queues": [{"name": "Needs your action", "items": queue}],
+        "recent": recent,
+    }
 
 
 async def _dpo(conn: Any) -> dict[str, Any]:
@@ -314,7 +318,8 @@ async def resend(log_uuid: UUID, principal: CurrentUser) -> dict[str, Any]:
         from cmp.db.sql import fetch_one as _fetch_one
 
         subject = await _fetch_one(
-            conn, "SELECT id, email, full_name FROM auth_user WHERE uuid = %s",
+            conn,
+            "SELECT id, email, full_name FROM auth_user WHERE uuid = %s",
             (str(entry["subject_uuid"]),),
         )
         if not subject:

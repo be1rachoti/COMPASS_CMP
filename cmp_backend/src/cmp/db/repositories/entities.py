@@ -179,9 +179,7 @@ _SPECS: dict[str, _Spec] = {
 }
 
 
-async def resolve(
-    conn: Conn, refs: list[tuple[str, int]]
-) -> dict[tuple[str, int], dict[str, Any]]:
+async def resolve(conn: Conn, refs: list[tuple[str, int]]) -> dict[tuple[str, int], dict[str, Any]]:
     """Label a batch of `(entity_type, entity_id)` pairs.
 
     Unknown entity types and rows that no longer exist are simply absent from the
@@ -209,10 +207,7 @@ async def resolve(
 
 async def attach(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Enrich audit rows in place with their resolved entity, and return them."""
-    refs = [
-        (str(r.get("entity_type") or ""), int(r.get("entity_id") or 0))
-        for r in rows
-    ]
+    refs = [(str(r.get("entity_type") or ""), int(r.get("entity_id") or 0)) for r in rows]
     resolved = await resolve(conn, refs)
     for row, ref in zip(rows, refs, strict=True):
         row.update(

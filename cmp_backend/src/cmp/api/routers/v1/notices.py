@@ -166,8 +166,10 @@ async def list_all_notices(
     reject_unknown_filters(request, {"status", "project"})
     async with connection() as conn:
         items, cursor, total = await repo.list_all(
-            conn, page,
-            role=principal.role, user_id=principal.user_id,
+            conn,
+            page,
+            role=principal.role,
+            user_id=principal.user_id,
             status=notice_status,
             project_uuid=str(project) if project else None,
         )
@@ -236,9 +238,7 @@ async def copy_notice(
 
 
 async def _require_notice(conn: Any, notice_uuid: str, principal: Any) -> dict[str, Any]:
-    notice = await repo.by_uuid(
-        conn, notice_uuid, role=principal.role, user_id=principal.user_id
-    )
+    notice = await repo.by_uuid(conn, notice_uuid, role=principal.role, user_id=principal.user_id)
     if not notice:
         raise NotFound("Notice")
     return notice
@@ -268,18 +268,14 @@ async def update_notice(
 
 
 @router.get("/notices/{notice_uuid}/versions", response_model=list[NoticeOut])
-async def notice_versions(
-    notice_uuid: UUID, principal: NoticeReader
-) -> list[dict[str, Any]]:
+async def notice_versions(notice_uuid: UUID, principal: NoticeReader) -> list[dict[str, Any]]:
     async with connection() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         return await repo.versions(conn, notice["notice_code"])
 
 
 @router.get("/notices/{notice_uuid}/purposes", response_model=list[PurposeOnNotice])
-async def list_notice_purposes(
-    notice_uuid: UUID, principal: NoticeReader
-) -> list[dict[str, Any]]:
+async def list_notice_purposes(notice_uuid: UUID, principal: NoticeReader) -> list[dict[str, Any]]:
     async with connection() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         return await repo.purposes_of(conn, notice["notice_id"])
@@ -305,8 +301,7 @@ async def attach_purpose(
     return {
         **row,
         "warning": (
-            "A mandatory purpose cannot be refused. Consider whether it belongs "
-            "in this notice."
+            "A mandatory purpose cannot be refused. Consider whether it belongs in this notice."
             if body.is_mandatory
             else None
         ),
@@ -318,9 +313,7 @@ async def attach_purpose(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Draft only",
 )
-async def detach_purpose(
-    notice_uuid: UUID, purpose_uuid: UUID, principal: RequireDPO
-) -> None:
+async def detach_purpose(notice_uuid: UUID, purpose_uuid: UUID, principal: RequireDPO) -> None:
     async with transaction() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         await service.detach_purpose(
@@ -329,9 +322,7 @@ async def detach_purpose(
 
 
 @router.get("/notices/{notice_uuid}/languages")
-async def list_languages(
-    notice_uuid: UUID, principal: NoticeReader
-) -> list[dict[str, Any]]:
+async def list_languages(notice_uuid: UUID, principal: NoticeReader) -> list[dict[str, Any]]:
     async with connection() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         return await repo.languages_of(conn, notice["notice_id"])
@@ -375,14 +366,14 @@ async def update_language(
 
 
 @router.post("/notices/{notice_uuid}/languages/{code}/approve", response_model=Acknowledged)
-async def approve_language(
-    notice_uuid: UUID, code: str, principal: RequireDPO
-) -> dict[str, Any]:
+async def approve_language(notice_uuid: UUID, code: str, principal: RequireDPO) -> dict[str, Any]:
     """Approval is per language, not once per notice."""
     async with transaction() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         row = await service.approve_language(
-            conn, notice_id=notice["notice_id"], language_code=code,
+            conn,
+            notice_id=notice["notice_id"],
+            language_code=code,
             actor_id=principal.user_id,
         )
     return {"ok": True, "message": f"'{code}' approved (sha256 {row['content_hash'][:12]}…)."}
@@ -410,7 +401,5 @@ async def preview(
 async def publish(notice_uuid: UUID, principal: RequireDPO) -> dict[str, Any]:
     async with transaction() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
-        await service.publish(
-            conn, notice_id=notice["notice_id"], actor_id=principal.user_id
-        )
+        await service.publish(conn, notice_id=notice["notice_id"], actor_id=principal.user_id)
         return await _require_notice(conn, str(notice_uuid), principal)

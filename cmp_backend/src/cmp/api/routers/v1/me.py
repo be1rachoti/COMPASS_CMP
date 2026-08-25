@@ -85,7 +85,10 @@ async def get_me(principal: RequireDataSubject) -> dict[str, Any]:
 async def update_me(body: UpdateMe, principal: RequireDataSubject) -> dict[str, Any]:
     async with transaction() as conn:
         updated = await user_repo.update_profile(
-            conn, principal.user_id, full_name=body.full_name, mobile=body.mobile,
+            conn,
+            principal.user_id,
+            full_name=body.full_name,
+            mobile=body.mobile,
             organization_id=None,
         )
         await audit.record(
@@ -118,9 +121,7 @@ async def verify_contact(body: ContactVerify, principal: RequireDataSubject) -> 
 
 
 @router.post("/person-type", response_model=Acknowledged)
-async def change_person_type(
-    body: PersonTypeChange, principal: CurrentUser
-) -> dict[str, Any]:
+async def change_person_type(body: PersonTypeChange, principal: CurrentUser) -> dict[str, Any]:
     """`role` is authorisation, `person_type` is identity.
 
     They are separate columns because a DPO is *also* an employee. A type change
@@ -196,9 +197,7 @@ async def my_consent(consent_uuid: UUID, principal: RequireDataSubject) -> dict[
 
 
 @router.get("/consents/{consent_uuid}/notice", summary="The words she actually saw")
-async def my_consent_notice(
-    consent_uuid: UUID, principal: RequireDataSubject
-) -> dict[str, Any]:
+async def my_consent_notice(consent_uuid: UUID, principal: RequireDataSubject) -> dict[str, Any]:
     """Reads the copied `notice_content_hash`, not the live notice.
 
     Joining live to notice_language would let a later correction silently
@@ -215,7 +214,7 @@ async def my_consent_notice(
                 "verified"
                 if served["hash_matches"]
                 else "The stored text no longer matches the hash recorded at capture. "
-                     "Report this to the Privacy Office."
+                "Report this to the Privacy Office."
             ),
         }
 
@@ -250,9 +249,7 @@ async def withdraw(
 ) -> dict[str, Any]:
     """Withdraw some purposes or all of them."""
     if not body.all and not body.purposes:
-        raise ValidationFailed(
-            "Name the purposes to withdraw, or set all", field="purposes"
-        )
+        raise ValidationFailed("Name the purposes to withdraw, or set all", field="purposes")
     async with transaction() as conn:
         return await consent_service.withdraw(
             conn,

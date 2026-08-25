@@ -59,7 +59,7 @@ async def check(
     try:
         r = get_redis()
         pipe = r.pipeline()
-        pipe.zremrangebyscore(k, 0, cutoff)          # drop what left the window
+        pipe.zremrangebyscore(k, 0, cutoff)  # drop what left the window
         pipe.zadd(k, {f"{now}:{uuidlib.uuid4().hex}": now})
         pipe.zcard(k)
         pipe.expire(k, window_s + 1)

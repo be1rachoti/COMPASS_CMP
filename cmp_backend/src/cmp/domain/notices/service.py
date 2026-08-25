@@ -89,8 +89,7 @@ async def generate_code(conn: Conn, *, project_name: str) -> str:
             return candidate
 
     raise ValidationFailed(
-        "Could not generate a unique notice code for this project. "
-        "Give one explicitly.",
+        "Could not generate a unique notice code for this project. Give one explicitly.",
         field="notice_code",
     )
 
@@ -289,8 +288,7 @@ async def attach_purpose(
         event=Event.NOTICE_PURPOSE_ATTACHED,
         entity_type="notice_purpose",
         entity_id=row["notice_purpose_id"],
-        detail={"notice_id": notice_id, "purpose": purpose_uuid,
-                "is_mandatory": is_mandatory},
+        detail={"notice_id": notice_id, "purpose": purpose_uuid, "is_mandatory": is_mandatory},
     )
     return row
 
@@ -301,9 +299,7 @@ async def detach_purpose(conn: Conn, *, notice_id: int, purpose_uuid: str) -> No
     if not purpose:
         raise NotFound("Purpose")
 
-    removed = await repo.detach_purpose(
-        conn, notice_id=notice_id, purpose_id=purpose["purpose_id"]
-    )
+    removed = await repo.detach_purpose(conn, notice_id=notice_id, purpose_id=purpose["purpose_id"])
     if not removed:
         raise NotFound("Purpose on this notice")
     await audit.record(
@@ -486,9 +482,7 @@ async def publish(conn: Conn, *, notice_id: int, actor_id: int) -> dict[str, Any
     return published
 
 
-async def publish_current(
-    conn: Conn, *, project_id: int, actor_id: int
-) -> dict[str, Any] | None:
+async def publish_current(conn: Conn, *, project_id: int, actor_id: int) -> dict[str, Any] | None:
     """Publish the project's draft notice as part of in_draft -> under_process.
 
     Called by the transition, so publication and the status change share one
@@ -527,10 +521,20 @@ async def preview(conn: Conn, notice_id: int, language_code: str | None = None) 
         chosen = languages[0]
 
     return {
-        "notice": {k: notice[k] for k in
-                   ("notice_uuid", "notice_code", "version", "status", "withdraw_url",
-                    "exercise_rights_url", "board_complaint_url", "dpo_contact",
-                    "recipients_text")},
+        "notice": {
+            k: notice[k]
+            for k in (
+                "notice_uuid",
+                "notice_code",
+                "version",
+                "status",
+                "withdraw_url",
+                "exercise_rights_url",
+                "board_complaint_url",
+                "dpo_contact",
+                "recipients_text",
+            )
+        },
         "project_name": notice["project_name"],
         "purposes": [{k: v for k, v in x.items() if k != "purpose_id"} for x in purposes],
         "available_languages": [x["language_code"] for x in languages],

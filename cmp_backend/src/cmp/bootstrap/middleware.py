@@ -42,7 +42,7 @@ def install(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
-        allow_credentials=True,   # the session cookie must travel
+        allow_credentials=True,  # the session cookie must travel
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
             "Content-Type",

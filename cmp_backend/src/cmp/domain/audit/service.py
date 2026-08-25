@@ -227,8 +227,12 @@ async def record_denial(
         event=Event.ACCESS_DENIED,
         entity_type="auth_user",
         entity_id=ctx.actor_user_id or 0,
-        detail={"resource": resource, "target_id": entity_id, "reason": reason,
-                "role": ctx.actor_role},
+        detail={
+            "resource": resource,
+            "target_id": entity_id,
+            "reason": reason,
+            "role": ctx.actor_role,
+        },
     )
 
 

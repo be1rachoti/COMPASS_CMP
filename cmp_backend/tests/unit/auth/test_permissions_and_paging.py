@@ -123,8 +123,11 @@ class TestCursorPagination:
 
     def test_descending_prefix(self) -> None:
         req = parse_page(
-            limit=10, cursor=None, sort="-created_at",
-            allowed_sorts=["created_at"], default_sort="created_at",
+            limit=10,
+            cursor=None,
+            sort="-created_at",
+            allowed_sorts=["created_at"],
+            default_sort="created_at",
         )
         assert req.descending is True
         assert req.sort_field == "created_at"
@@ -133,23 +136,32 @@ class TestCursorPagination:
     def test_limit_bounds_are_enforced(self, limit: int) -> None:
         with pytest.raises(BadRequest) as exc:
             parse_page(
-                limit=limit, cursor=None, sort=None,
-                allowed_sorts=["created_at"], default_sort="created_at",
+                limit=limit,
+                cursor=None,
+                sort=None,
+                allowed_sorts=["created_at"],
+                default_sort="created_at",
             )
         assert exc.value.code == "bad_limit"
 
     def test_fetch_limit_probes_one_extra_row(self) -> None:
         """One extra row answers "is there a next page?" without a second query."""
         req = parse_page(
-            limit=25, cursor=None, sort=None,
-            allowed_sorts=["created_at"], default_sort="created_at",
+            limit=25,
+            cursor=None,
+            sort=None,
+            allowed_sorts=["created_at"],
+            default_sort="created_at",
         )
         assert req.fetch_limit == 26
 
     def test_build_page_trims_probe_and_mints_cursor(self) -> None:
         req = parse_page(
-            limit=2, cursor=None, sort="-created_at",
-            allowed_sorts=["created_at"], default_sort="-created_at",
+            limit=2,
+            cursor=None,
+            sort="-created_at",
+            allowed_sorts=["created_at"],
+            default_sort="-created_at",
         )
         rows = [
             {"_row_id": 3, "created_at": "2026-01-03", "name": "c"},
@@ -167,8 +179,11 @@ class TestCursorPagination:
 
     def test_no_next_cursor_on_the_last_page(self) -> None:
         req = parse_page(
-            limit=5, cursor=None, sort="-created_at",
-            allowed_sorts=["created_at"], default_sort="-created_at",
+            limit=5,
+            cursor=None,
+            sort="-created_at",
+            allowed_sorts=["created_at"],
+            default_sort="-created_at",
         )
         rows = [{"_row_id": 1, "created_at": "2026-01-01"}]
         items, next_cursor = build_page(rows, req)

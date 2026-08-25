@@ -106,13 +106,9 @@ class TestTheDataSubjectSurfaceIsExactlyOne:
     def test_she_can_write_only_me(self) -> None:
         assert writable_resources(Role.DATA_SUBJECT) == [resources.ME]
 
-    @pytest.mark.parametrize(
-        "resource", sorted(resources.ALL - {resources.ME})
-    )
+    @pytest.mark.parametrize("resource", sorted(resources.ALL - {resources.ME}))
     def test_every_other_resource_is_closed_to_her(self, resource: str) -> None:
-        assert not can_read(resource, Role.DATA_SUBJECT), (
-            f"a data subject can read {resource}"
-        )
+        assert not can_read(resource, Role.DATA_SUBJECT), f"a data subject can read {resource}"
 
 
 class TestStaffCannotReachTheSubjectSurface:

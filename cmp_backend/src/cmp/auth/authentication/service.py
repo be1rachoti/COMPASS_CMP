@@ -49,9 +49,7 @@ async def authenticate(
     locked_for = await ratelimit.is_locked_out(login)
     if locked_for:
         log.warning("auth.attempt_while_locked")
-        raise RateLimited(
-            "Too many failed attempts. Try again later.", retry_after_s=locked_for
-        )
+        raise RateLimited("Too many failed attempts. Try again later.", retry_after_s=locked_for)
 
     user = await user_repo.credentials_by_login(conn, login)
 
@@ -198,7 +196,10 @@ async def verify_mfa(conn: Conn, *, user_uuid: str, code: str, token: str) -> di
 
 async def resend_mfa(conn: Conn, *, user_uuid: str, email: str) -> None:
     await ratelimit.enforce(
-        "mfa_resend", user_uuid, limit=3, window_s=600,
+        "mfa_resend",
+        user_uuid,
+        limit=3,
+        window_s=600,
         message="Too many code requests. Wait a few minutes.",
     )
     issued = await otp.issue(otp.Scope.STAFF_MFA, user_uuid, ttl_s=settings.mfa_ttl_s)
@@ -217,8 +218,10 @@ async def request_subject_otp(conn: Conn, *, contact: str) -> None:
     oracle for "who consented to this project".
     """
     await ratelimit.enforce(
-        "subject_otp", contact.lower(),
-        limit=settings.otp_requests_per_contact_per_hour, window_s=3600,
+        "subject_otp",
+        contact.lower(),
+        limit=settings.otp_requests_per_contact_per_hour,
+        window_s=3600,
         message="Too many code requests for this contact.",
     )
 
@@ -283,8 +286,7 @@ async def verify_subject_otp(
         actor_user_id=user["id"],
         detail={"method": "otp"},
     )
-    return {"token": token, "session": session, "user": user,
-            "max_age": settings.session_ttl_s}
+    return {"token": token, "session": session, "user": user, "max_age": settings.session_ttl_s}
 
 
 # ------------------------------------------------------------------ password
@@ -323,7 +325,10 @@ async def change_password(
 async def request_password_reset(conn: Conn, *, email: str) -> None:
     """Always succeeds from the caller's point of view - see request_subject_otp."""
     await ratelimit.enforce(
-        "pwreset", email.lower(), limit=3, window_s=3600,
+        "pwreset",
+        email.lower(),
+        limit=3,
+        window_s=3600,
         message="Too many reset requests.",
     )
     user = await user_repo.by_email(conn, email)
@@ -346,9 +351,7 @@ async def request_password_reset(conn: Conn, *, email: str) -> None:
     )
 
 
-async def confirm_password_reset(
-    conn: Conn, *, email: str, code: str, new_password: str
-) -> None:
+async def confirm_password_reset(conn: Conn, *, email: str, code: str, new_password: str) -> None:
     user = await user_repo.by_email(conn, email)
     if not user:
         raise BadRequest("Invalid or expired code", code="otp_invalid", field="code")

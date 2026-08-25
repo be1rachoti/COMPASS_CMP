@@ -23,7 +23,7 @@ class Schema(BaseModel):
     """Base for every request and response model."""
 
     model_config = ConfigDict(
-        extra="forbid",           # an unexpected field is a typo or an attack, not a feature
+        extra="forbid",  # an unexpected field is a typo or an attack, not a feature
         str_strip_whitespace=True,
         validate_assignment=True,
         from_attributes=True,

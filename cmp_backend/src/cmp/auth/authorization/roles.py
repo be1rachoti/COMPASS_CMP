@@ -18,9 +18,7 @@ from cmp.core.permissions import Role
 
 #: Everyone who works for the fiduciary. Excludes the data subject, who is not
 #: staff and whose entire surface is `/me`.
-STAFF_ROLES: frozenset[Role] = frozenset(
-    {Role.DPO, Role.DCO, Role.RND_USER, Role.ADMIN}
-)
+STAFF_ROLES: frozenset[Role] = frozenset({Role.DPO, Role.DCO, Role.RND_USER, Role.ADMIN})
 
 #: Roles that can see across every project, or provision accounts. These are the
 #: two that get a second factor — not because they are more trusted, but because

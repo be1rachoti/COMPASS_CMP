@@ -72,9 +72,7 @@ class ConsoleEmailTransport:
         from pathlib import Path
 
         self._path = (
-            Path(outbox_path)
-            if outbox_path
-            else Path(settings.upload_root).parent / "outbox.log"
+            Path(outbox_path) if outbox_path else Path(settings.upload_root).parent / "outbox.log"
         )
 
     def send(self, *, to: str, subject: str, body: str) -> dict[str, object]:
@@ -115,8 +113,16 @@ class SmtpEmailTransport:
     not a surprise anybody wants.
     """
 
-    def __init__(self, host: str, port: int, *, username: str = "", password: str = "",
-                 use_tls: bool = True, timeout_s: float | None = None) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        *,
+        username: str = "",
+        password: str = "",
+        use_tls: bool = True,
+        timeout_s: float | None = None,
+    ) -> None:
         self._host = host
         self._port = port
         self._username = username

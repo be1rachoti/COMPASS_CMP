@@ -70,8 +70,11 @@ def notify_project_event(
             except (ConnectionError, TimeoutError, OSError) as exc:
                 failed.append({"to": obscure(address), "error": type(exc).__name__})
     except SoftTimeLimitExceeded:
-        log.warning("notification.batch_timed_out", delivered=delivered,
-                    remaining=len(recipients) - delivered)
+        log.warning(
+            "notification.batch_timed_out",
+            delivered=delivered,
+            remaining=len(recipients) - delivered,
+        )
         raise
 
     if failed:

@@ -37,41 +37,34 @@ celery_app = Celery("cmp")
 celery_app.conf.update(
     broker_url=settings.celery_broker_url,
     result_backend=settings.celery_result_backend,
-
     # --- serialisation: JSON only. Pickle would let a compromised broker
     # execute arbitrary code inside the worker.
     task_serializer="json",
     result_serializer="json",
     accept_content=["json"],
-
     timezone="UTC",
     enable_utc=True,
-
     # --- delivery guarantees
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_acks_on_failure_or_timeout=True,
     worker_prefetch_multiplier=1,
-
     # --- limits
-    task_time_limit=600,          # hard kill
-    task_soft_time_limit=540,     # raises SoftTimeLimitExceeded so a task can clean up
+    task_time_limit=600,  # hard kill
+    task_soft_time_limit=540,  # raises SoftTimeLimitExceeded so a task can clean up
     task_default_retry_delay=10,
     task_max_retries=5,
     result_expires=60 * 60 * 24,
-
     broker_transport_options={
-        "visibility_timeout": 3600,   # > task_time_limit, or work is delivered twice
+        "visibility_timeout": 3600,  # > task_time_limit, or work is delivered twice
         "max_retries": 3,
     },
     broker_connection_retry_on_startup=True,
     broker_pool_limit=10,
-
     # --- observability
     task_send_sent_event=True,
     worker_send_task_events=True,
     task_track_started=True,
-
     # --- routing
     task_default_queue="default",
     task_queues=(
@@ -93,7 +86,6 @@ celery_app.conf.update(
         "cmp.reports.*": {"queue": "reports"},
         "cmp.maintenance.*": {"queue": "default"},
     },
-
     # --- Beat. Exactly one instance; two produce duplicate scheduled work.
     beat_schedule={
         "expire-consent-links": {
@@ -121,7 +113,8 @@ celery_app.autodiscover_tasks(
         "cmp.tasks.notifications",
         "cmp.tasks.maintenance",
         "cmp.tasks.exchange",
-    ], force=True
+    ],
+    force=True,
 )
 
 

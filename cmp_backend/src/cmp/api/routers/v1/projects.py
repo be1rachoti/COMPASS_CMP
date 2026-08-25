@@ -195,8 +195,12 @@ async def list_projects(
     reject_unknown_filters(request, {"status", "q"})
     async with connection() as conn:
         items, cursor, total = await repo.list_projects(
-            conn, page, role=principal.role, user_id=principal.user_id,
-            project_status=project_status, q=q,
+            conn,
+            page,
+            role=principal.role,
+            user_id=principal.user_id,
+            project_status=project_status,
+            q=q,
         )
     return {"items": items, "next_cursor": cursor, "total": total}
 
@@ -248,7 +252,9 @@ async def update_project(
 async def transitions(project_uuid: UUID, principal: ProjectReader) -> dict[str, Any]:
     async with connection() as conn:
         return await service.transitions_for(
-            conn, project_uuid=str(project_uuid), role=principal.role,
+            conn,
+            project_uuid=str(project_uuid),
+            role=principal.role,
             user_id=principal.user_id,
         )
 
@@ -269,9 +275,7 @@ async def transition(
 
 
 @router.get("/projects/{project_uuid}/history")
-async def project_history(
-    project_uuid: UUID, principal: ProjectReader
-) -> list[dict[str, Any]]:
+async def project_history(project_uuid: UUID, principal: ProjectReader) -> list[dict[str, Any]]:
     async with connection() as conn:
         project = await repo.require(
             conn, str(project_uuid), role=principal.role, user_id=principal.user_id
@@ -303,13 +307,14 @@ async def project_summary(project_uuid: UUID, principal: ProjectReader) -> dict[
 
 
 @router.post("/projects/{project_uuid}/dco", response_model=Acknowledged)
-async def assign_dco(
-    project_uuid: UUID, body: DcoAssign, principal: RequireDPO
-) -> dict[str, Any]:
+async def assign_dco(project_uuid: UUID, body: DcoAssign, principal: RequireDPO) -> dict[str, Any]:
     async with transaction() as conn:
         await service.assign_dco(
-            conn, project_uuid=str(project_uuid), dco_user_uuid=str(body.dco_user_uuid),
-            actor_id=principal.user_id, role=principal.role,
+            conn,
+            project_uuid=str(project_uuid),
+            dco_user_uuid=str(body.dco_user_uuid),
+            actor_id=principal.user_id,
+            role=principal.role,
         )
     return {"ok": True, "message": "Data Collection Owner assigned."}
 
@@ -322,8 +327,11 @@ async def close_project(
         raise Forbidden("Only a DPO or DCO may close a project")
     async with transaction() as conn:
         return await service.close(
-            conn, project_uuid=str(project_uuid), actor_id=principal.user_id,
-            role=principal.role, reason=body.reason,
+            conn,
+            project_uuid=str(project_uuid),
+            actor_id=principal.user_id,
+            role=principal.role,
+            reason=body.reason,
         )
 
 
@@ -359,7 +367,8 @@ async def add_approval(
     if len(payload) > settings.max_upload_bytes:
         raise BadRequest(
             f"Proof exceeds {settings.max_upload_bytes // (1024 * 1024)} MB",
-            code="payload_too_large", field="proof",
+            code="payload_too_large",
+            field="proof",
         )
     if proof.content_type not in settings.allowed_proof_mime:
         raise ValidationFailed(
@@ -407,7 +416,9 @@ async def download_proof(approval_uuid: UUID, principal: ProjectReader) -> Respo
         if not approval:
             raise NotFound("Approval")
         await audit.record(
-            conn, event=Event.APPROVAL_PROOF_DOWNLOADED, entity_type="project_approval",
+            conn,
+            event=Event.APPROVAL_PROOF_DOWNLOADED,
+            entity_type="project_approval",
             entity_id=approval["approval_id"],
         )
 
@@ -454,9 +465,7 @@ async def list_sites(project_uuid: UUID, principal: ProjectReader) -> list[dict[
 
 
 @router.post("/projects/{project_uuid}/sites", status_code=status.HTTP_201_CREATED)
-async def add_site(
-    project_uuid: UUID, body: SiteIn, principal: ProjectReader
-) -> dict[str, Any]:
+async def add_site(project_uuid: UUID, body: SiteIn, principal: ProjectReader) -> dict[str, Any]:
     """Register where collection will physically happen.
 
     The R&D User is included because they are the one who knows: they designed
@@ -504,7 +513,9 @@ async def update_site(
             conn, site["site_id"], site_label=body.site_label, location=body.location
         )
         await audit.record(
-            conn, event=Event.SITE_UPDATED, entity_type="project_site",
+            conn,
+            event=Event.SITE_UPDATED,
+            entity_type="project_site",
             entity_id=site["site_id"],
         )
     return updated
@@ -523,8 +534,11 @@ async def deactivate_site(site_uuid: UUID, principal: RequireDPO) -> dict[str, A
             conn, project_uuid=str(site["project_uuid"]), actor_id=principal.user_id
         )
         await audit.record(
-            conn, event=Event.SITE_DEACTIVATED, entity_type="project_site",
-            entity_id=site["site_id"], detail={"links_revoked": revoked},
+            conn,
+            event=Event.SITE_DEACTIVATED,
+            entity_type="project_site",
+            entity_id=site["site_id"],
+            detail={"links_revoked": revoked},
         )
     return {"ok": True, "message": f"Site deactivated. {revoked} link(s) revoked."}
 
@@ -554,7 +568,9 @@ async def assign_agent(
             role=principal.role,
         )
         await audit.record(
-            conn, event=Event.SITE_AGENT_ASSIGNED, entity_type="consent_link",
+            conn,
+            event=Event.SITE_AGENT_ASSIGNED,
+            entity_type="consent_link",
             entity_id=link["link_id"],
             detail={"site": str(site_uuid), "agent_ref": body.agent_ref},
         )

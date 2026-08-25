@@ -70,7 +70,8 @@ async def search(
     clause = " AND ".join(where)
     keyset, kparams = keyset_clause(req, alias="l", id_column="log_id")
     rows = await fetch_all(
-        conn, f"SELECT l.log_id AS _row_id, {_SELECT}{_FROM} WHERE {clause}{keyset}",
+        conn,
+        f"SELECT l.log_id AS _row_id, {_SELECT}{_FROM} WHERE {clause}{keyset}",
         [*params, *kparams],
     )
     total = await fetch_one(conn, f"SELECT count(*) AS n {_FROM} WHERE {clause}", params)
@@ -79,13 +80,11 @@ async def search(
 
 
 async def by_uuid(conn: Conn, log_uuid: str) -> Row | None:
-    return await fetch_one(
-        conn, f"SELECT {_SELECT}{_FROM} WHERE l.log_uuid = %s", (log_uuid,)
-    )
+    return await fetch_one(conn, f"SELECT {_SELECT}{_FROM} WHERE l.log_uuid = %s", (log_uuid,))
 
 
 async def for_subject(conn: Conn, subject_user_id: int, *, limit: int = 50) -> list[Row]:
-    """"What has happened to my data" - the DSAR query.
+    """ "What has happened to my data" - the DSAR query.
 
     Backed by idx_audit_subject. Events that are noise to the subject (her own
     page views, her own sign-ins) are excluded; what remains is what was done

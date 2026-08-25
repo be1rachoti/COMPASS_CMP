@@ -170,6 +170,4 @@ class TestNoCredentialReachesALogLine:
             r"log\.\w+\([^)]*\b(password|plaintext|raw_code|secret)\s*=",
             source,
         )
-        assert not offenders, (
-            f"{module_path} appears to log {sorted(set(offenders))}"
-        )
+        assert not offenders, f"{module_path} appears to log {sorted(set(offenders))}"

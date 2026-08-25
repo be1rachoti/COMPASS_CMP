@@ -38,9 +38,7 @@ class ConsoleSmsTransport:
         from pathlib import Path
 
         self._path = (
-            Path(outbox_path)
-            if outbox_path
-            else Path(settings.upload_root).parent / "outbox.log"
+            Path(outbox_path) if outbox_path else Path(settings.upload_root).parent / "outbox.log"
         )
 
     def send(self, *, to: str, body: str) -> dict[str, object]:
@@ -51,9 +49,7 @@ class ConsoleSmsTransport:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
                 stamp = datetime.now(UTC).isoformat(timespec="seconds")
                 with self._path.open("a", encoding="utf-8") as handle:
-                    handle.write(
-                        f"\n{'=' * 78}\n{stamp}  [sms]  to: {to}\n{'-' * 78}\n{body}\n"
-                    )
+                    handle.write(f"\n{'=' * 78}\n{stamp}  [sms]  to: {to}\n{'-' * 78}\n{body}\n")
             except OSError as exc:  # pragma: no cover
                 log.warning("sms.outbox_unavailable", error=str(exc))
 

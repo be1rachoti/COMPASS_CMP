@@ -50,12 +50,21 @@ AUDIT: Final = "audit"
 #: import-time failure rather than a silent deny in production.
 ALL: Final[frozenset[str]] = frozenset(
     {
-        USER, ME,
-        PURPOSE, PROCESSOR, DATA_SOURCE,
-        PROJECT, APPROVAL, SITE,
+        USER,
+        ME,
+        PURPOSE,
+        PROCESSOR,
+        DATA_SOURCE,
+        PROJECT,
+        APPROVAL,
+        SITE,
         NOTICE,
-        LINK, CONSENT,
-        EXPORT, IMPORT, COLLECTION, ASSET,
+        LINK,
+        CONSENT,
+        EXPORT,
+        IMPORT,
+        COLLECTION,
+        ASSET,
         AUDIT,
     }
 )

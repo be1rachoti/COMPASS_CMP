@@ -77,9 +77,14 @@ async def public_notice(
             x["language_code"] for x in languages if x["approved_at"] is not None
         ],
         "purposes": [
-            {"name": p["name"], "description": p["description"], "uses": p["uses"],
-             "lawful_basis": p["lawful_basis"], "data_categories": p["data_categories"],
-             "retention_period": str(p["retention_period"])}
+            {
+                "name": p["name"],
+                "description": p["description"],
+                "uses": p["uses"],
+                "lawful_basis": p["lawful_basis"],
+                "data_categories": p["data_categories"],
+                "retention_period": str(p["retention_period"]),
+            }
             for p in purposes
         ],
         "superseded": notice["status"] == "superseded",

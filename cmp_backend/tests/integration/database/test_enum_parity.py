@@ -50,9 +50,7 @@ async def test_python_enum_matches_the_database(conn: Any, pg_type: str) -> None
     assert not missing, (
         f"{pg_type}: the database accepts {missing} but core/enums.py does not offer them"
     )
-    assert not extra, (
-        f"{pg_type}: core/enums.py offers {extra} but the database will refuse them"
-    )
+    assert not extra, f"{pg_type}: core/enums.py offers {extra} but the database will refuse them"
     # Order carries meaning for the lifecycle enums — project_status is walked in
     # declaration order, and a reordering would silently change what "next" means.
     assert python == database, f"{pg_type}: order differs — {python} vs {database}"

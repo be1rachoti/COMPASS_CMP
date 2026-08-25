@@ -80,7 +80,8 @@ async def search(
     )
     async with connection() as conn:
         items, cursor, total = await repo.search(
-            conn, page,
+            conn,
+            page,
             actor_uuid=str(actor) if actor else None,
             subject_uuid=str(subject) if subject else None,
             entity_type=entity_type,

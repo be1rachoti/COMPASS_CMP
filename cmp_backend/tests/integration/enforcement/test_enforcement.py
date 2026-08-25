@@ -99,9 +99,7 @@ class TestAuditChain:
             assert current["p"] == previous["h"], "chain link does not match"
             assert current["h"] and len(current["h"]) == 64
 
-    async def test_verify_reports_an_intact_chain(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_verify_reports_an_intact_chain(self, conn: Any, seeded: dict[str, Any]) -> None:
         await conn.execute(
             """INSERT INTO audit_log (event_type, actor_user_id, entity_type, entity_id)
                VALUES ('project.created', %s, 'project', 1)""",
@@ -110,9 +108,7 @@ class TestAuditChain:
         cur = await conn.execute("SELECT * FROM cmp_audit_verify()")
         assert await cur.fetchall() == []
 
-    async def test_verify_detects_a_tampered_row(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_verify_detects_a_tampered_row(self, conn: Any, seeded: dict[str, Any]) -> None:
         """The trigger refuses an UPDATE, so tampering means disabling it first -
         which is exactly what somebody with database access would do. The chain is
         the control that survives that.
@@ -151,14 +147,11 @@ class TestPublishedNoticeIsFrozen:
             )
         assert "immutable" in str(exc.value)
 
-    async def test_served_text_cannot_be_rewritten(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_served_text_cannot_be_rewritten(self, conn: Any, seeded: dict[str, Any]) -> None:
         """INV-4: the words she was shown are the words that stay on the record."""
         with pytest.raises(psycopg.errors.InsufficientPrivilege) as exc:
             await conn.execute(
-                "UPDATE notice_language SET rendered_text = 'Different words' "
-                "WHERE notice_id = %s",
+                "UPDATE notice_language SET rendered_text = 'Different words' WHERE notice_id = %s",
                 (seeded["notice"]["notice_id"],),
             )
         assert "INV-4" in str(exc.value)
@@ -192,9 +185,7 @@ class TestConsentCoherence:
             params,
         )
 
-    async def test_a_coherent_artefact_is_accepted(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_a_coherent_artefact_is_accepted(self, conn: Any, seeded: dict[str, Any]) -> None:
         await self._artefact(conn, seeded)
         # Scoped to this test's own subject. A global count would depend on
         # whatever else is committed in the database, which makes the test pass
@@ -205,9 +196,7 @@ class TestConsentCoherence:
         )
         assert (await cur.fetchone())["n"] == 1
 
-    async def test_wrong_content_hash_is_refused(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_wrong_content_hash_is_refused(self, conn: Any, seeded: dict[str, Any]) -> None:
         """The artefact must carry the hash of the text actually served.
 
         Without this, an artefact could claim consent to text that was never
@@ -309,9 +298,7 @@ class TestPurposeConstraints:
             )
         assert "s7_clause_required" in str(exc.value)
 
-    async def test_s7_purpose_must_name_its_clause(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_s7_purpose_must_name_its_clause(self, conn: Any, seeded: dict[str, Any]) -> None:
         with pytest.raises(psycopg.errors.CheckViolation):
             await conn.execute(
                 """INSERT INTO purpose (purpose_code, name, description, uses,
@@ -359,9 +346,7 @@ class TestAssetConsent:
         ).fetchone()
         return int(asset["asset_id"])
 
-    async def test_a_bystander_row_is_permitted(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_a_bystander_row_is_permitted(self, conn: Any, seeded: dict[str, Any]) -> None:
         """INV-12. Multi-subject capture includes people in frame who never
         consented. If the row cannot exist, a redact-before-release rule cannot be
         enforced against someone the system does not know is there.
@@ -373,8 +358,7 @@ class TestAssetConsent:
             (asset_id,),
         )
         cur = await conn.execute(
-            "SELECT count(*) AS n FROM asset_consent "
-            "WHERE asset_id = %s AND consent_id IS NULL",
+            "SELECT count(*) AS n FROM asset_consent WHERE asset_id = %s AND consent_id IS NULL",
             (asset_id,),
         )
         assert (await cur.fetchone())["n"] == 1

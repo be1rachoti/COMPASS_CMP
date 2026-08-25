@@ -75,8 +75,11 @@ def verify_audit_chain() -> dict[str, Any]:
                     )
                 else:
                     await audit.record(
-                        conn, event=Event.AUDIT_VERIFIED, entity_type="audit_log",
-                        entity_id=0, actor_user_id=None,
+                        conn,
+                        event=Event.AUDIT_VERIFIED,
+                        entity_type="audit_log",
+                        entity_id=0,
+                        actor_user_id=None,
                         detail={"rows_checked": result["rows_checked"], "intact": True},
                     )
             return {"intact": result["intact"], "rows_checked": result["rows_checked"]}

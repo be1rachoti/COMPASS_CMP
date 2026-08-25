@@ -71,10 +71,7 @@ def send_login_code(user_uuid: str, contact: str, code: str) -> dict[str, Any]:
         channel=channel,
         to=contact,
         subject="Your sign-in code",
-        body=(
-            f"Your sign-in code is {code}. "
-            f"It expires in {settings.otp_ttl_s // 60} minutes."
-        ),
+        body=(f"Your sign-in code is {code}. It expires in {settings.otp_ttl_s // 60} minutes."),
     )
 
 
@@ -86,8 +83,7 @@ def send_consent_code(contact: str, code: str) -> dict[str, Any]:
         to=contact,
         subject="Confirm your contact details",
         body=(
-            f"Your confirmation code is {code}. "
-            f"It expires in {settings.otp_ttl_s // 60} minutes."
+            f"Your confirmation code is {code}. It expires in {settings.otp_ttl_s // 60} minutes."
         ),
     )
 

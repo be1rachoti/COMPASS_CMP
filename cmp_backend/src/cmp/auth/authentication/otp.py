@@ -41,7 +41,7 @@ class Scope:
 
 @dataclass(frozen=True, slots=True)
 class Issued:
-    code: str          # delivered out of band; never returned by an API response
+    code: str  # delivered out of band; never returned by an API response
     expires_in_s: int
 
 
@@ -86,7 +86,7 @@ async def verify(scope: str, identity: str, code: str) -> bool:
 
     if tokens_equal(stored, hash_otp(code, scope=scope)):
         pipe = r.pipeline()
-        pipe.delete(ck)   # single use
+        pipe.delete(ck)  # single use
         pipe.delete(ak)
         await pipe.execute()
         log.info("otp.verified", scope=scope)

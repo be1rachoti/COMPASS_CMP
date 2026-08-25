@@ -107,9 +107,7 @@ class TestLockoutBehaviour:
         assert not await rate_limit.is_locked_out(account)
         await rate_limit.clear_login_failures(account)
 
-    async def test_locking_one_account_does_not_lock_another(
-        self, redis_conn: object
-    ) -> None:
+    async def test_locking_one_account_does_not_lock_another(self, redis_conn: object) -> None:
         """The keying, asserted. A shared key would be a denial-of-service on
         every user the moment one account was targeted."""
         from cmp.auth.rate_limit import service as rate_limit

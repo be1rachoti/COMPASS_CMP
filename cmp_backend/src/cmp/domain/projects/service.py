@@ -149,9 +149,7 @@ async def transition(
     current = locked["project_status"]
 
     facts = await _facts(conn, project["project_id"])
-    permitted = validate(
-        current=current, target=target, role=role, facts=facts, reason=reason
-    )
+    permitted = validate(current=current, target=target, role=role, facts=facts, reason=reason)
 
     # Publication is a side effect of in_draft -> under_process, and it happens in
     # this transaction. A project that moved without its notice publishing would
@@ -182,9 +180,7 @@ async def transition(
             "from": current,
             "to": permitted.to.value,
             "reason": reason,
-            "published_notice": str(published_notice["notice_uuid"])
-            if published_notice
-            else None,
+            "published_notice": str(published_notice["notice_uuid"]) if published_notice else None,
         },
     )
     log.info(
@@ -343,9 +339,7 @@ async def add_site(
         if not processor:
             raise NotFound("Processor")
         if processor["status"] != "active":
-            raise ValidationFailed(
-                "That processor is not active", field="processor_uuid"
-            )
+            raise ValidationFailed("That processor is not active", field="processor_uuid")
         processor_id = processor["processor_id"]
 
     source = None
@@ -384,8 +378,7 @@ async def add_site(
         event=Event.SITE_CREATED,
         entity_type="project_site",
         entity_id=site["site_id"],
-        detail={"project": project_uuid, "site_label": site_label,
-                "material_change": material},
+        detail={"project": project_uuid, "site_label": site_label, "material_change": material},
     )
     return {
         **site,

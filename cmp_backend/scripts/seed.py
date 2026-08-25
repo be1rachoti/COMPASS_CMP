@@ -99,8 +99,15 @@ async def seed() -> None:
                        VALUES (%s, %s, %s::user_role, %s::person_type, 'active', %s, %s, %s)
                        ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name
                        RETURNING id, uuid, role""",
-                    (full_name, email, role, person_type, org,
-                     email.split("@")[0], hash_password(PASSWORD)),
+                    (
+                        full_name,
+                        email,
+                        role,
+                        person_type,
+                        org,
+                        email.split("@")[0],
+                        hash_password(PASSWORD),
+                    ),
                 )
                 ids[role] = row["id"]
                 log.info("seed.user", role=role, email=email)
@@ -126,14 +133,24 @@ async def seed() -> None:
 
             purposes = []
             for code, name, desc, uses, cats, days, _mandatory in [
-                ("PUR-GAIT-TRAIN", "Gait model training",
-                 "Building and evaluating gait-based identification models.",
-                 "Train, validate and benchmark models. No decisions are made about you.",
-                 ["facial_image", "gait_video", "name", "mobile"], 1095, False),
-                ("PUR-QUALITY", "Recording quality assurance",
-                 "Checking that recordings are usable before they enter the dataset.",
-                 "Manual and automated review of recording quality.",
-                 ["facial_image", "gait_video"], 365, False),
+                (
+                    "PUR-GAIT-TRAIN",
+                    "Gait model training",
+                    "Building and evaluating gait-based identification models.",
+                    "Train, validate and benchmark models. No decisions are made about you.",
+                    ["facial_image", "gait_video", "name", "mobile"],
+                    1095,
+                    False,
+                ),
+                (
+                    "PUR-QUALITY",
+                    "Recording quality assurance",
+                    "Checking that recordings are usable before they enter the dataset.",
+                    "Manual and automated review of recording quality.",
+                    ["facial_image", "gait_video"],
+                    365,
+                    False,
+                ),
             ]:
                 p = await fetch_one(
                     conn,
@@ -146,8 +163,16 @@ async def seed() -> None:
                                'business_policy', 'withdrawal', %s::interval,
                                'quarantine', 'active', %s)
                        RETURNING purpose_id, purpose_uuid, name""",
-                    (code, name, desc, uses, cats, timedelta(days=days),
-                     timedelta(days=730), ids["dpo"]),
+                    (
+                        code,
+                        name,
+                        desc,
+                        uses,
+                        cats,
+                        timedelta(days=days),
+                        timedelta(days=730),
+                        ids["dpo"],
+                    ),
                 )
                 purposes.append(p)
                 log.info("seed.purpose", code=code)
@@ -208,8 +233,7 @@ async def seed() -> None:
                                                     approved_at)
                        VALUES (%s, %s::language_code, %s, %s, %s, %s, now())
                        RETURNING notice_language_id""",
-                    (notice["notice_id"], lang, text, content_hash(text),
-                     ids["dpo"], ids["dpo"]),
+                    (notice["notice_id"], lang, text, content_hash(text), ids["dpo"], ids["dpo"]),
                 )
 
             # Publish, then walk the project to approved through its real states.
@@ -230,8 +254,12 @@ async def seed() -> None:
                                                  proof_file_hash, uploaded_by)
                    VALUES (%s, 'security', 'SEC-2026-0142', %s,
                            'approvals/seed-proof.pdf', %s, %s)""",
-                (project["project_id"], date(2026, 2, 10),
-                 content_hash("seed proof document"), ids["rnd_user"]),
+                (
+                    project["project_id"],
+                    date(2026, 2, 10),
+                    content_hash("seed proof document"),
+                    ids["rnd_user"],
+                ),
             )
 
             for frm, to, actor in [
@@ -258,8 +286,13 @@ async def seed() -> None:
                                              max_uses, created_by)
                    VALUES (%s, %s, %s, %s, 500, %s)
                    RETURNING link_id, link_uuid""",
-                (notice["notice_id"], site["site_id"], token_fingerprint(raw_token)[:64],
-                 datetime.now(UTC) + timedelta(days=60), ids["dco"]),
+                (
+                    notice["notice_id"],
+                    site["site_id"],
+                    token_fingerprint(raw_token)[:64],
+                    datetime.now(UTC) + timedelta(days=60),
+                    ids["dco"],
+                ),
             )
 
             await conn.execute(

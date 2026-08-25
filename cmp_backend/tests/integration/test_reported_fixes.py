@@ -20,7 +20,7 @@ pytestmark = pytest.mark.integration
 
 
 class TestTransitionWithAnAlreadyPublishedNotice:
-    """"Unable to move the project to Under Process ... even though the notice
+    """ "Unable to move the project to Under Process ... even though the notice
     is attached."
 
     The transition publishes the project's draft notice as part of moving. A DPO
@@ -60,7 +60,7 @@ class TestTransitionWithAnAlreadyPublishedNotice:
 
 
 class TestSiteIsNotRequiredToPublish:
-    """"Remove 'Add Site' mandatory from DPO view. Site should be added by RnD."
+    """ "Remove 'Add Site' mandatory from DPO view. Site should be added by RnD."
 
     Requiring a site to publish made the DPO invent one to get past their own
     screen, which puts a fiction in the recipients line of a notice a data
@@ -106,7 +106,7 @@ class TestSiteIsNotRequiredToPublish:
 
 
 class TestNoticeCreationConveniences:
-    """"New Notice should provide ability to add Text" and "Generate the Notice
+    """ "New Notice should provide ability to add Text" and "Generate the Notice
     ID by system"."""
 
     async def test_code_is_generated_and_text_is_stored_in_one_call(
@@ -135,7 +135,7 @@ class TestNoticeCreationConveniences:
 
 
 class TestCopyingANotice:
-    """"Provide ability to attach already available notice to the project."
+    """ "Provide ability to attach already available notice to the project."
 
     Copy, never share. `notice.project_id` is single-valued and every consent
     artefact records the notice served, so a shared row would make "which text,
@@ -178,7 +178,7 @@ class TestCopyingANotice:
 
 
 class TestAuditEntityResolution:
-    """"In Audit Trail currently only listing is there. User will not be able to
+    """ "In Audit Trail currently only listing is there. User will not be able to
     see which notice and what details."
 
     The trail stores `notice#42` because that reference never goes stale. The
@@ -201,9 +201,7 @@ class TestAuditEntityResolution:
         assert resolved[1]["entity_label"] == "Test Project"
         assert resolved[1]["entity_href"] == f"/projects/{seeded['project']['project_uuid']}"
 
-    async def test_a_deleted_row_resolves_to_nothing_rather_than_failing(
-        self, conn: Any
-    ) -> None:
+    async def test_a_deleted_row_resolves_to_nothing_rather_than_failing(self, conn: Any) -> None:
         """The trail outlives what it describes.
 
         A page of audit rows must render even when one of them points at

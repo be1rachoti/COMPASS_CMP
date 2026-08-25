@@ -159,8 +159,16 @@ async def create_source(
         RETURNING source_id, source_uuid, source_code, name, source_role, exchange_mode,
                   id_scheme, is_authoritative_for, status, created_at
         """,
-        (source_code, name, source_role, exchange_mode, id_scheme, processor_id, site_id,
-         is_authoritative_for),
+        (
+            source_code,
+            name,
+            source_role,
+            exchange_mode,
+            id_scheme,
+            processor_id,
+            site_id,
+            is_authoritative_for,
+        ),
     )
     assert row is not None
     return row

@@ -84,15 +84,20 @@ async def open_link(token: TokenPath, request: Request, response: Response) -> d
     """An invalid link returns a plain message and renders no notice content."""
     _no_referrer(response)
     await ratelimit.enforce(
-        "public_link", request.client.host if request.client else "unknown",
-        limit=settings.public_link_rate_per_minute, window_s=60, fail_open=False,
+        "public_link",
+        request.client.host if request.client else "unknown",
+        limit=settings.public_link_rate_per_minute,
+        window_s=60,
+        fail_open=False,
     )
 
     async with transaction() as conn:
         link = await service.resolve_link(conn, token)
         languages = await notice_repo.languages_of(conn, link["notice_id"])
         await audit.record(
-            conn, event=Event.LINK_OPENED, entity_type="consent_link",
+            conn,
+            event=Event.LINK_OPENED,
+            entity_type="consent_link",
             entity_id=link["link_id"],
         )
 
@@ -107,11 +112,10 @@ async def open_link(token: TokenPath, request: Request, response: Response) -> d
     }
 
 
-@router.post("/c/{token}/register", response_model=Acknowledged,
-             status_code=status.HTTP_201_CREATED)
-async def register(
-    token: TokenPath, body: RegisterBody, response: Response
-) -> dict[str, Any]:
+@router.post(
+    "/c/{token}/register", response_model=Acknowledged, status_code=status.HTTP_201_CREATED
+)
+async def register(token: TokenPath, body: RegisterBody, response: Response) -> dict[str, Any]:
     """Create the person and set `registered_via_link_id`."""
     _no_referrer(response)
     async with transaction() as conn:
@@ -135,17 +139,18 @@ async def register(
 
 
 @router.post("/c/{token}/otp", response_model=Acknowledged, summary="6-digit code, 10 minutes")
-async def request_code(
-    token: TokenPath, body: OtpBody, response: Response
-) -> dict[str, Any]:
+async def request_code(token: TokenPath, body: OtpBody, response: Response) -> dict[str, Any]:
     _no_referrer(response)
     async with transaction() as conn:
         await service.send_contact_code(conn, token=token, contact=body.contact)
     return {"ok": True, "message": "If those details are registered, a code has been sent."}
 
 
-@router.post("/c/{token}/otp/verify", response_model=Acknowledged,
-             summary="5 attempts, then the code is discarded")
+@router.post(
+    "/c/{token}/otp/verify",
+    response_model=Acknowledged,
+    summary="5 attempts, then the code is discarded",
+)
 async def verify_code(
     token: TokenPath, body: OtpVerifyBody, request: Request, response: Response
 ) -> dict[str, Any]:

@@ -24,8 +24,7 @@ def mfa_code(code: str) -> tuple[str, str]:
     minutes = settings.mfa_ttl_s // 60
     return (
         "Your verification code",
-        f"Your verification code is {code}.\n"
-        f"It expires in {minutes} minutes." + _SIGN_OFF,
+        f"Your verification code is {code}.\nIt expires in {minutes} minutes." + _SIGN_OFF,
     )
 
 

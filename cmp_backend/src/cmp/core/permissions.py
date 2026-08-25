@@ -43,10 +43,10 @@ class Scope(StrEnum):
     the response, they were already counted, they already moved a cursor.
     """
 
-    ALL = "all"        # every row
+    ALL = "all"  # every row
     SCOPED = "scoped"  # rows assigned to them (a DCO: projects they are DCO of)
-    OWN = "own"        # rows they created, or that are about them
-    NONE = "none"      # no rows
+    OWN = "own"  # rows they created, or that are about them
+    NONE = "none"  # no rows
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +74,7 @@ _DENY = Grant(Scope.NONE)
 MATRIX: dict[str, dict[Role, Grant]] = {
     "user": {
         Role.ADMIN: Grant(Scope.ALL, write=True),
-        Role.DPO: Grant(Scope.ALL),          # read-only: DPO sees the register, admin provisions
+        Role.DPO: Grant(Scope.ALL),  # read-only: DPO sees the register, admin provisions
     },
     "purpose": {
         Role.DPO: Grant(Scope.ALL, write=True),
@@ -100,7 +100,7 @@ MATRIX: dict[str, dict[Role, Grant]] = {
     "approval": {
         Role.DPO: Grant(Scope.ALL),
         Role.DCO: Grant(Scope.SCOPED),
-        Role.RND_USER: Grant(Scope.OWN, write=True),   # upload proof
+        Role.RND_USER: Grant(Scope.OWN, write=True),  # upload proof
     },
     "site": {
         Role.DPO: Grant(Scope.ALL, write=True),
@@ -119,7 +119,7 @@ MATRIX: dict[str, dict[Role, Grant]] = {
     "consent": {
         Role.DPO: Grant(Scope.ALL),
         Role.DCO: Grant(Scope.SCOPED),
-        Role.RND_USER: Grant(Scope.OWN),   # summary counts only, enforced per-route
+        Role.RND_USER: Grant(Scope.OWN),  # summary counts only, enforced per-route
     },
     "export": {
         Role.DPO: Grant(Scope.ALL, write=True),
@@ -176,12 +176,28 @@ def scope_of(resource: str, role: Role | str) -> Scope:
 # frontend never has to guess, and never has to hold a second copy of the matrix.
 NAV_BY_ROLE: dict[Role, tuple[str, ...]] = {
     Role.DPO: (
-        "dashboard", "projects", "notices", "purposes", "processors",
-        "sources", "consents", "links", "exports", "imports", "audit", "users",
+        "dashboard",
+        "projects",
+        "notices",
+        "purposes",
+        "processors",
+        "sources",
+        "consents",
+        "links",
+        "exports",
+        "imports",
+        "audit",
+        "users",
     ),
     Role.DCO: (
-        "dashboard", "projects", "sites", "links", "consents",
-        "exports", "imports", "collections",
+        "dashboard",
+        "projects",
+        "sites",
+        "links",
+        "consents",
+        "exports",
+        "imports",
+        "collections",
     ),
     Role.RND_USER: ("dashboard", "projects", "approvals", "imports", "collections"),
     Role.ADMIN: ("dashboard", "users", "processors", "sources", "audit"),

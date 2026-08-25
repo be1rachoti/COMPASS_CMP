@@ -97,8 +97,16 @@ async def create(
                   exercise_rights_url, board_complaint_url, dpo_contact, recipients_text,
                   status, change_class, published_at, created_at, updated_at
         """,
-        (notice_code, project_id, version, withdraw_url, exercise_rights_url,
-         board_complaint_url, dpo_contact, change_class),
+        (
+            notice_code,
+            project_id,
+            version,
+            withdraw_url,
+            exercise_rights_url,
+            board_complaint_url,
+            dpo_contact,
+            change_class,
+        ),
     )
     assert row is not None
     return row
@@ -150,7 +158,8 @@ async def versions(conn: Conn, notice_code: str) -> list[Row]:
 
 async def max_version(conn: Conn, notice_code: str) -> int:
     row = await fetch_one(
-        conn, "SELECT coalesce(max(version), 0) AS v FROM notice WHERE notice_code = %s",
+        conn,
+        "SELECT coalesce(max(version), 0) AS v FROM notice WHERE notice_code = %s",
         (notice_code,),
     )
     return int((row or {}).get("v", 0))
@@ -173,9 +182,7 @@ async def publish(conn: Conn, notice_id: int, *, recipients_text: str, approved_
 
 
 async def supersede(conn: Conn, notice_id: int) -> None:
-    await conn.execute(
-        "UPDATE notice SET status = 'superseded' WHERE notice_id = %s", (notice_id,)
-    )
+    await conn.execute("UPDATE notice SET status = 'superseded' WHERE notice_id = %s", (notice_id,))
 
 
 # ------------------------------------------------------------ notice_purpose

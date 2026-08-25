@@ -61,9 +61,7 @@ def send_withdrawal_confirmation(
     if stopped:
         lines.append("Stopped: " + ", ".join(stopped) + ".")
     if continuing:
-        lines.append(
-            "Continuing under a separate lawful basis: " + ", ".join(continuing) + "."
-        )
+        lines.append("Continuing under a separate lawful basis: " + ", ".join(continuing) + ".")
     lines.append(
         "Data already collected is not deleted by this withdrawal. "
         "To ask for erasure, use the rights request form."
@@ -98,8 +96,11 @@ def notify_project_event(
             except (ConnectionError, TimeoutError, OSError) as exc:
                 failed.append({"to": obscure(address), "error": type(exc).__name__})
     except SoftTimeLimitExceeded:
-        log.warning("notification.batch_timed_out", delivered=delivered,
-                    remaining=len(recipients) - delivered)
+        log.warning(
+            "notification.batch_timed_out",
+            delivered=delivered,
+            remaining=len(recipients) - delivered,
+        )
         raise
 
     if failed:

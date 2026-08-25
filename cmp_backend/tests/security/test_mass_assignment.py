@@ -70,10 +70,10 @@ class TestResponseModelsFilterRatherThanFail:
             project_name: str
 
         row = {
-            "project_id": 42,                 # internal surrogate key
+            "project_id": 42,  # internal surrogate key
             "project_uuid": "b5a5a382-cd5f-4c57-a8f7-abc2cc872382",
             "project_name": "Gait Study",
-            "dco_user_id": 17,                # join scaffolding
+            "dco_user_id": 17,  # join scaffolding
         }
         dumped = ProjectOut.model_validate(row).model_dump()
 

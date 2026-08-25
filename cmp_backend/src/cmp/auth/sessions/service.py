@@ -37,7 +37,7 @@ log = get_logger("cmp.sessions")
 
 @dataclass(frozen=True, slots=True)
 class Session:
-    sid: str                 # public identifier, used by DELETE /auth/sessions/{uuid}
+    sid: str  # public identifier, used by DELETE /auth/sessions/{uuid}
     user_id: int
     user_uuid: str
     role: str
@@ -47,7 +47,7 @@ class Session:
     ip_address: str | None
     user_agent: str | None
     mfa_verified: bool
-    partial: bool            # password accepted, MFA outstanding
+    partial: bool  # password accepted, MFA outstanding
     csrf_token: str
 
     @property
@@ -200,8 +200,7 @@ async def promote(token: str) -> Session | None:
     )
     pipe.expire(_skey(fp), settings.session_ttl_s)
     await pipe.execute()
-    m |= {"partial": "0", "mfa_verified": "1", "last_seen_at": str(now),
-          "expires_at": str(expires)}
+    m |= {"partial": "0", "mfa_verified": "1", "last_seen_at": str(now), "expires_at": str(expires)}
     log.info("session.promoted", sid=m["sid"], user_id=m["user_id"])
     return _from_mapping(m)
 

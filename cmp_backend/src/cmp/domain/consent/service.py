@@ -76,9 +76,7 @@ async def create_link(
     notices = await notice_repo.list_for_project(conn, project["project_id"])
     published = [n for n in notices if n["status"] == "published"]
     if not published:
-        raise Conflict(
-            "The project has no published notice to serve", code="no_published_notice"
-        )
+        raise Conflict("The project has no published notice to serve", code="no_published_notice")
     notice = max(published, key=lambda n: n["version"])
 
     # The raw token is returned once and never stored. What goes in the database
@@ -98,11 +96,14 @@ async def create_link(
         event=Event.LINK_CREATED,
         entity_type="consent_link",
         entity_id=link["link_id"],
-        detail={"site": site_uuid, "notice": str(notice["notice_uuid"]),
-                "expires_at": expires_at.isoformat(), "max_uses": max_uses},
+        detail={
+            "site": site_uuid,
+            "notice": str(notice["notice_uuid"]),
+            "expires_at": expires_at.isoformat(),
+            "max_uses": max_uses,
+        },
     )
-    return {**link, "token": raw, "site_uuid": site_uuid,
-            "notice_uuid": notice["notice_uuid"]}
+    return {**link, "token": raw, "site_uuid": site_uuid, "notice_uuid": notice["notice_uuid"]}
 
 
 async def resolve_link(conn: Conn, token: str) -> dict[str, Any]:
@@ -193,13 +194,17 @@ async def send_contact_code(conn: Conn, *, token: str, contact: str) -> None:
     link = await resolve_link(conn, token)
 
     await ratelimit.enforce(
-        "consent_otp_contact", contact.lower(),
-        limit=settings.otp_requests_per_contact_per_hour, window_s=3600,
+        "consent_otp_contact",
+        contact.lower(),
+        limit=settings.otp_requests_per_contact_per_hour,
+        window_s=3600,
         message="Too many code requests for this contact.",
     )
     await ratelimit.enforce(
-        "consent_otp_token", str(link["link_uuid"]),
-        limit=settings.otp_requests_per_token_per_hour, window_s=3600,
+        "consent_otp_token",
+        str(link["link_uuid"]),
+        limit=settings.otp_requests_per_token_per_hour,
+        window_s=3600,
         message="Too many code requests for this link.",
     )
 
@@ -269,8 +274,11 @@ async def serve_notice(
             entity_id=link["notice_id"],
             subject_user_id=user_id,
             actor_user_id=user_id,
-            detail={"language": language_code, "sha256": language["content_hash"],
-                    "link": str(link["link_uuid"])},
+            detail={
+                "language": language_code,
+                "sha256": language["content_hash"],
+                "link": str(link["link_uuid"]),
+            },
         )
 
     return {
@@ -291,9 +299,7 @@ async def serve_notice(
         "content_hash": language["content_hash"],
         # Strip the integer id before this leaves the process: the public flow
         # has no response model to filter it for us.
-        "purposes": [
-            {k: v for k, v in p.items() if k != "purpose_id"} for p in purposes
-        ],
+        "purposes": [{k: v for k, v in p.items() if k != "purpose_id"} for p in purposes],
         "served_at": served_at,
     }
 
@@ -412,13 +418,18 @@ async def capture(
 
         dispatch_optional(
             send_consent_receipt,
-            user["email"], str(artefact["consent_uuid"]), link["project_name"],
+            user["email"],
+            str(artefact["consent_uuid"]),
+            link["project_name"],
         )
 
-    log.info("consent.captured", consent=str(artefact["consent_uuid"]),
-             granted=sum(1 for v in grants.values() if v), total=len(grants))
-    return {**artefact, "project_name": link["project_name"],
-            "notice_uuid": link["notice_uuid"]}
+    log.info(
+        "consent.captured",
+        consent=str(artefact["consent_uuid"]),
+        granted=sum(1 for v in grants.values() if v),
+        total=len(grants),
+    )
+    return {**artefact, "project_name": link["project_name"], "notice_uuid": link["notice_uuid"]}
 
 
 async def withdraw(
@@ -444,9 +455,7 @@ async def withdraw(
         # Scope in the query result, not a separate permission check.
         raise NotFound("Consent record")
 
-    live = await repo.current_for_user_notice(
-        conn, user_id=user_id, notice_id=current["notice_id"]
-    )
+    live = await repo.current_for_user_notice(conn, user_id=user_id, notice_id=current["notice_id"])
     if not live or live["consent_id"] != current["consent_id"]:
         raise Conflict(
             "This consent record has been superseded. Withdraw the current one.",
@@ -506,8 +515,7 @@ async def withdraw(
     # consent was never what authorised it. Saying otherwise is a promise the
     # platform cannot keep.
     other_basis = [
-        by_uuid[u]["name"] for u in targets
-        if by_uuid[u]["lawful_basis"] == "legitimate_use_s7"
+        by_uuid[u]["name"] for u in targets if by_uuid[u]["lawful_basis"] == "legitimate_use_s7"
     ]
 
     await audit.record(
@@ -517,8 +525,7 @@ async def withdraw(
         entity_id=artefact["consent_id"],
         subject_user_id=user_id,
         actor_user_id=user_id,
-        detail={"supersedes": consent_uuid, "withdrawn": sorted(targets),
-                "all": withdraw_all},
+        detail={"supersedes": consent_uuid, "withdrawn": sorted(targets), "all": withdraw_all},
     )
 
     user = await user_repo.by_id(conn, user_id)
@@ -528,7 +535,10 @@ async def withdraw(
 
         dispatch_optional(
             send_withdrawal_confirmation,
-            user["email"], str(artefact["consent_uuid"]), stopped, continuing,
+            user["email"],
+            str(artefact["consent_uuid"]),
+            stopped,
+            continuing,
         )
 
     return {

@@ -103,14 +103,19 @@ def apply_retention_lapse() -> dict[str, Any]:
 
                 if quarantined or erase_due:
                     await audit.record(
-                        conn, event=Event.ASSET_DISPOSITION_CHANGED,
-                        entity_type="asset_consent", entity_id=0, actor_user_id=None,
-                        detail={"quarantined": quarantined, "erase_due": erase_due,
-                                "reason": "consent_validity_elapsed"},
+                        conn,
+                        event=Event.ASSET_DISPOSITION_CHANGED,
+                        entity_type="asset_consent",
+                        entity_id=0,
+                        actor_user_id=None,
+                        detail={
+                            "quarantined": quarantined,
+                            "erase_due": erase_due,
+                            "reason": "consent_validity_elapsed",
+                        },
                     )
 
-            log.info("maintenance.retention_applied",
-                     quarantined=quarantined, erase_due=erase_due)
+            log.info("maintenance.retention_applied", quarantined=quarantined, erase_due=erase_due)
             return {"quarantined": quarantined, "erase_due": erase_due}
 
     return _run(work)

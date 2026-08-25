@@ -179,9 +179,7 @@ async def get_user(user_uuid: UUID, principal: RequireDPOorAdmin) -> dict[str, A
 
 
 @router.patch("/{user_uuid}", response_model=UserOut)
-async def update_user(
-    user_uuid: UUID, body: UpdateUser, principal: RequireAdmin
-) -> dict[str, Any]:
+async def update_user(user_uuid: UUID, body: UpdateUser, principal: RequireAdmin) -> dict[str, Any]:
     async with transaction() as conn:
         user = await repo.require_by_uuid(conn, str(user_uuid))
         updated = await repo.update_profile(
@@ -203,9 +201,7 @@ async def update_user(
 
 
 @router.post("/{user_uuid}/role", response_model=Acknowledged, summary="Change a role")
-async def change_role(
-    user_uuid: UUID, body: RoleChange, principal: RequireAdmin
-) -> dict[str, Any]:
+async def change_role(user_uuid: UUID, body: RoleChange, principal: RequireAdmin) -> dict[str, Any]:
     if body.role not in {r.value for r in Role}:
         raise ValidationFailed("Unknown role", field="role")
 

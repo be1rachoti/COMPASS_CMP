@@ -140,7 +140,10 @@ async def list_all_exports(
     reject_unknown_filters(request, {"type"})
     async with connection() as conn:
         items, cursor, total = await repo.list_all_exports(
-            conn, page, role=principal.role, user_id=principal.user_id,
+            conn,
+            page,
+            role=principal.role,
+            user_id=principal.user_id,
             export_type=export_type,
         )
     return {"items": items, "next_cursor": cursor, "total": total}
@@ -180,9 +183,7 @@ async def generate_export(
     """Export A carries no person rows, which is what makes it safe to email.
     Export B carries person rows, and therefore writes one export_line each."""
     if body.type not in ("collection_pack", "consented_list"):
-        raise ValidationFailed(
-            "type must be collection_pack or consented_list", field="type"
-        )
+        raise ValidationFailed("type must be collection_pack or consented_list", field="type")
     async with transaction() as conn:
         return await service.generate(
             conn,
@@ -231,7 +232,9 @@ async def download_export(export_uuid: UUID, principal: ExportReader) -> Respons
 
         payload, media_type, ext = await service.render(conn, export)
         await audit.record(
-            conn, event=Event.EXPORT_DOWNLOADED, entity_type="export_log",
+            conn,
+            event=Event.EXPORT_DOWNLOADED,
+            entity_type="export_log",
             entity_id=export["export_id"],
         )
 
@@ -277,7 +280,8 @@ async def _read_manifest(manifest: UploadFile) -> bytes:
     if len(payload) > settings.max_upload_bytes:
         raise BadRequest(
             f"Manifest exceeds {settings.max_upload_bytes // (1024 * 1024)} MB",
-            code="payload_too_large", field="manifest",
+            code="payload_too_large",
+            field="manifest",
         )
     if manifest.content_type not in settings.allowed_manifest_mime:
         raise ValidationFailed(
@@ -311,9 +315,16 @@ async def validate_import(
         )
     async with transaction() as conn:
         await audit.record(
-            conn, event=Event.IMPORT_VALIDATED, entity_type="import_batch", entity_id=0,
-            detail={"source": str(source), "valid": result["valid"],
-                    "errors": result["error_count"], "sha256": result["file_sha256"]},
+            conn,
+            event=Event.IMPORT_VALIDATED,
+            entity_type="import_batch",
+            entity_id=0,
+            detail={
+                "source": str(source),
+                "valid": result["valid"],
+                "errors": result["error_count"],
+                "sha256": result["file_sha256"],
+            },
         )
     return result
 
@@ -350,8 +361,12 @@ async def list_imports(
     reject_unknown_filters(request, {"source", "status"})
     async with connection() as conn:
         items, cursor, total = await repo.list_batches(
-            conn, page, role=principal.role, user_id=principal.user_id,
-            source_uuid=str(source) if source else None, status=batch_status,
+            conn,
+            page,
+            role=principal.role,
+            user_id=principal.user_id,
+            source_uuid=str(source) if source else None,
+            status=batch_status,
         )
     return {"items": items, "next_cursor": cursor, "total": total}
 
@@ -409,9 +424,7 @@ async def list_collections(
 
 
 @router.get("/collections/{collection_uuid}", response_model=CollectionOut)
-async def get_collection(
-    collection_uuid: UUID, principal: CollectionReader
-) -> dict[str, Any]:
+async def get_collection(collection_uuid: UUID, principal: CollectionReader) -> dict[str, Any]:
     async with connection() as conn:
         collection = await repo.collection_by_uuid(
             conn, str(collection_uuid), role=principal.role, user_id=principal.user_id

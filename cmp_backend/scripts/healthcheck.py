@@ -71,9 +71,7 @@ async def run_checks() -> list[Check]:
         async with connection() as conn:
             # The enforcement layer. A deployment whose triggers were dropped by
             # a restore looks completely healthy until somebody edits history.
-            cur = await conn.execute(
-                "SELECT count(*) AS n FROM pg_trigger WHERE NOT tgisinternal"
-            )
+            cur = await conn.execute("SELECT count(*) AS n FROM pg_trigger WHERE NOT tgisinternal")
             triggers = (await cur.fetchone())["n"]
             results.append(
                 Check("enforcement triggers present", triggers >= 20, f"{triggers} triggers")
@@ -188,8 +186,7 @@ async def run_checks() -> list[Check]:
             Check(
                 "transports are configured for this environment",
                 not settings.is_production or settings.email_transport != "console",
-                f"email_transport={settings.email_transport} — production is writing "
-                "mail to a file"
+                f"email_transport={settings.email_transport} — production is writing mail to a file"
                 if settings.is_production and settings.email_transport == "console"
                 else f"email={settings.email_transport}, storage={settings.storage_backend}",
             )
@@ -222,9 +219,7 @@ def main() -> int:
     else:
         for check in checks:
             sys.stdout.write(check.line + "\n")
-        sys.stdout.write(
-            f"\n{len(checks) - len(failed)}/{len(checks)} passed\n"
-        )
+        sys.stdout.write(f"\n{len(checks) - len(failed)}/{len(checks)} passed\n")
 
     return 1 if failed else 0
 

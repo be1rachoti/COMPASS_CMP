@@ -89,9 +89,7 @@ class TestProjectScope:
         )
         assert found is not None
 
-    async def test_the_dpo_sees_every_project(
-        self, conn: Any, seeded: dict[str, Any]
-    ) -> None:
+    async def test_the_dpo_sees_every_project(self, conn: Any, seeded: dict[str, Any]) -> None:
         found = await project_repo.by_uuid(
             conn,
             str(seeded["project"]["project_uuid"]),
@@ -111,12 +109,16 @@ class TestProjectScope:
         other_dco = (await other.fetchone())["id"]
 
         mine = await project_repo.by_uuid(
-            conn, str(seeded["project"]["project_uuid"]),
-            role=Role.DCO, user_id=seeded["users"]["dco"]["id"],
+            conn,
+            str(seeded["project"]["project_uuid"]),
+            role=Role.DCO,
+            user_id=seeded["users"]["dco"]["id"],
         )
         theirs = await project_repo.by_uuid(
-            conn, str(seeded["project"]["project_uuid"]),
-            role=Role.DCO, user_id=other_dco,
+            conn,
+            str(seeded["project"]["project_uuid"]),
+            role=Role.DCO,
+            user_id=other_dco,
         )
 
         assert mine is not None

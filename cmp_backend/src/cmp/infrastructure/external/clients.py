@@ -43,9 +43,7 @@ def build_client(*, base_url: str = "", headers: dict[str, str] | None = None) -
     )
 
 
-def request_json(
-    client: httpx.Client, method: str, url: str, **kwargs: Any
-) -> dict[str, Any]:
+def request_json(client: httpx.Client, method: str, url: str, **kwargs: Any) -> dict[str, Any]:
     """One request, with the upstream's failure translated into ours.
 
     An upstream 500 is not our 500: `UpstreamError` carries a distinct code so

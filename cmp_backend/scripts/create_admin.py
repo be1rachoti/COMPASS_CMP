@@ -36,9 +36,7 @@ async def create(email: str, full_name: str, password: str) -> int:
     await open_pool()
     try:
         async with transaction() as conn:
-            cur = await conn.execute(
-                "SELECT count(*) AS n FROM auth_user WHERE role = 'admin'"
-            )
+            cur = await conn.execute("SELECT count(*) AS n FROM auth_user WHERE role = 'admin'")
             if (await cur.fetchone())["n"] > 0:
                 sys.stderr.write(
                     "An administrator already exists.\n\n"

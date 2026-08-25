@@ -30,6 +30,7 @@ from cmp.core.logging import get_logger
 
 log = get_logger("cmp.api.errors")
 
+
 async def cmp_error_handler(request: Request, exc: Exception) -> ORJSONResponse:
     assert isinstance(exc, CmpError)
     headers: dict[str, str] | None = None
