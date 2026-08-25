@@ -46,3 +46,10 @@ next-env.d.ts
 /coverage
 /playwright-report
 /test-results
+
+# Saved browser sessions from the E2E setup project. These contain live
+# session cookies for real accounts; they are regenerated on every run and
+# must never be committed.
+e2e/.auth/
+test-results/
+playwright-report/
