@@ -25,9 +25,9 @@ import { z } from "zod";
 
 import { AuthLayout } from "@/components/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
-import { apiPost } from "@/lib/api-client";
-import { ApiError } from "@/lib/api-error";
-import type { LoginResponse } from "@/lib/types";
+import { apiPost } from "@/lib/api";
+import { ApiError } from "@/lib/errors";
+import type { LoginResponse } from "@/types";
 import { useAuth } from "@/providers";
 
 const passwordSchema = z.object({

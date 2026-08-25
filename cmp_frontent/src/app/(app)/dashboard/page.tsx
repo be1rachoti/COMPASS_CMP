@@ -46,8 +46,8 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useDashboard } from "@/lib/queries";
-import { formatDateTime, humanise } from "@/lib/utils";
+import { useDashboard } from "@/features/dashboard";
+import { formatDateTime, humanise } from "@/lib/format";
 import { useAuth } from "@/providers";
 
 /** Counts worth surfacing, and what they mean. Anything not listed is rendered

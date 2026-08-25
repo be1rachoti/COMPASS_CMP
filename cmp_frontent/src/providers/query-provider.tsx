@@ -18,7 +18,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as React from "react";
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/errors";
 import { config } from "@/lib/config";
 
 export function makeQueryClient(): QueryClient {

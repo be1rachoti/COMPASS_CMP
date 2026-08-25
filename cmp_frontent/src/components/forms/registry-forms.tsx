@@ -24,9 +24,10 @@ import {
   useCreateSource,
   useUpdateProcessor,
   useUpdateSource,
-} from "@/lib/mutations";
-import { useDataCategories, useEnums, useProcessors } from "@/lib/queries";
-import type { DataSource, Processor } from "@/lib/types";
+} from "@/features/registry";
+import { useDataCategories, useEnums } from "@/features/meta";
+import { useProcessors } from "@/features/registry";
+import type { DataSource, Processor } from "@/types";
 import { useToast } from "@/providers";
 
 /* ================================================================ processor */

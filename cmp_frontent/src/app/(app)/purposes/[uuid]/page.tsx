@@ -36,8 +36,8 @@ import {
   Tr,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { usePurpose, usePurposeUsage, usePurposeVersions } from "@/lib/queries";
-import { formatDateTime, formatDuration, humanise } from "@/lib/utils";
+import { usePurpose, usePurposeUsage, usePurposeVersions } from "@/features/registry";
+import { formatDateTime, formatDuration, humanise } from "@/lib/format";
 
 export default function PurposeDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();

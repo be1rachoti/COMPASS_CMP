@@ -44,8 +44,8 @@ import { BrandMark } from "@/components/ui/graphics";
 import { Button } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
 import { config } from "@/lib/config";
-import type { Role } from "@/lib/types";
-import { cn, initials } from "@/lib/utils";
+import type { Role } from "@/types";
+import { cn, initials } from "@/lib/format";
 import { useAuth, useTheme } from "@/providers";
 
 interface NavItem {

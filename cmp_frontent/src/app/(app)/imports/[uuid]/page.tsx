@@ -37,8 +37,8 @@ import {
   Tr,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useImportBatch, useImportErrors } from "@/lib/queries";
-import { formatDateTime, shortHash } from "@/lib/utils";
+import { useImportBatch, useImportErrors } from "@/features/exchange";
+import { formatDateTime, shortHash } from "@/lib/format";
 
 export default function ImportDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();

@@ -26,10 +26,10 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { apiDelete, apiPost } from "@/lib/api-client";
-import { ApiError } from "@/lib/api-error";
-import { useSessions } from "@/lib/queries";
-import { formatDateTime, formatRelative } from "@/lib/utils";
+import { apiDelete, apiPost } from "@/lib/api";
+import { ApiError } from "@/lib/errors";
+import { useSessions } from "@/features/account";
+import { formatDateTime, formatRelative } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 export default function AccountPage() {

@@ -16,7 +16,7 @@ import {
   humanise,
   initials,
   shortHash,
-} from "./utils";
+} from "@/lib/format";
 
 describe("cn", () => {
   it("lets a later Tailwind utility win", () => {

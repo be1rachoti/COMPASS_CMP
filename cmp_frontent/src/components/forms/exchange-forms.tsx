@@ -21,13 +21,10 @@ import { z } from "zod";
 import { FileInput, FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Mono, Select, Table, Td, Th, Tr } from "@/components/ui/primitives";
-import {
-  useCreateExport,
-  useSubmitImport,
-  useValidateImport,
-} from "@/lib/mutations";
-import { useProjects, useSites, useSources } from "@/lib/queries";
-import type { DataSource, ImportValidation, Page } from "@/lib/types";
+import { useCreateExport, useSubmitImport, useValidateImport } from "@/features/exchange";
+import { useProjects, useSites } from "@/features/projects";
+import { useSources } from "@/features/registry";
+import type { DataSource, ImportValidation, Page } from "@/types";
 import { useToast } from "@/providers";
 
 const MAX_MANIFEST_BYTES = 25 * 1024 * 1024;

@@ -24,13 +24,9 @@ import { z } from "zod";
 import { CheckboxGroup, FormError, useApiForm } from "@/components/forms/form";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { DialogFooter } from "@/components/ui/dialog";
-import { useDataCategories, useEnums } from "@/lib/queries";
-import {
-  useCreatePurpose,
-  useUpdatePurpose,
-  type PurposeInput,
-} from "@/lib/mutations";
-import type { Purpose } from "@/lib/types";
+import { useDataCategories, useEnums } from "@/features/meta";
+import { type PurposeInput, useCreatePurpose, useUpdatePurpose } from "@/features/registry";
+import type { Purpose } from "@/types";
 import { useToast } from "@/providers";
 
 const schema = z

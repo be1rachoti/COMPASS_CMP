@@ -22,9 +22,9 @@ import {
 import { EmptyConsent } from "@/components/ui/graphics";
 import { Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useAllConsents } from "@/lib/queries";
-import type { ConsentListRow } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { useAllConsents } from "@/features/consent";
+import type { ConsentListRow } from "@/types";
+import { formatDateTime } from "@/lib/format";
 
 /** Not from /meta/enums: these are derived states, not a database enum. */
 const STATUS_OPTIONS = [

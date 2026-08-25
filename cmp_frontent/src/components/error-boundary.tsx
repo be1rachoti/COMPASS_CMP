@@ -15,7 +15,7 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/primitives";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/errors";
 
 interface Props {
   children: React.ReactNode;

@@ -31,9 +31,10 @@ import { ConfirmDialog, Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Badge, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useActivatePurpose, useEnums, usePurposes, useRetirePurpose } from "@/lib/queries";
-import type { Purpose } from "@/lib/types";
-import { formatDuration, humanise } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useActivatePurpose, usePurposes, useRetirePurpose } from "@/features/registry";
+import type { Purpose } from "@/types";
+import { formatDuration, humanise } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 function PurposesPageView() {

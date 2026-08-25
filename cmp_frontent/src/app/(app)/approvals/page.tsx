@@ -20,10 +20,10 @@ import { ResourceList, useCursorStack } from "@/components/resource-list";
 import { EmptyQueue } from "@/components/ui/graphics";
 import { Badge, Button, Mono, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { apiDownload } from "@/lib/api-client";
-import { useAllApprovals } from "@/lib/queries";
-import type { ApprovalListRow } from "@/lib/types";
-import { formatDate, formatDateTime, humanise, saveBlob, shortHash } from "@/lib/utils";
+import { apiDownload } from "@/lib/api";
+import { useAllApprovals } from "@/features/projects";
+import type { ApprovalListRow } from "@/types";
+import { formatDate, formatDateTime, humanise, saveBlob, shortHash } from "@/lib/format";
 import { useToast } from "@/providers";
 
 export default function ApprovalsPage() {

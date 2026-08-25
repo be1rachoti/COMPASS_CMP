@@ -44,9 +44,9 @@ import {
   Tr,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useConsent, useConsentAssets, useConsentGrants } from "@/lib/queries";
-import type { PurposeGrant } from "@/lib/types";
-import { formatDate, formatDateTime, formatDuration, humanise, shortHash } from "@/lib/utils";
+import { useConsent, useConsentAssets, useConsentGrants } from "@/features/consent";
+import type { PurposeGrant } from "@/types";
+import { formatDate, formatDateTime, formatDuration, humanise, shortHash } from "@/lib/format";
 
 export default function ConsentDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();

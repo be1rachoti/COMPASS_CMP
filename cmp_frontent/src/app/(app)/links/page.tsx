@@ -26,9 +26,10 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyLink } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useAllLinks, useEnums, useRevokeLink } from "@/lib/queries";
-import type { LinkListRow } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { useAllLinks, useRevokeLink } from "@/features/consent";
+import { useEnums } from "@/features/meta";
+import type { LinkListRow } from "@/types";
+import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/providers";
 
 function LinksPageView() {

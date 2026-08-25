@@ -26,9 +26,10 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useEnums, useProcessors, useSuspendProcessor } from "@/lib/queries";
-import type { Processor } from "@/lib/types";
-import { formatDate, humanise } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useProcessors, useSuspendProcessor } from "@/features/registry";
+import type { Processor } from "@/types";
+import { formatDate, humanise } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 export default function ProcessorsPage() {

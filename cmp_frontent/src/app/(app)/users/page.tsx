@@ -28,15 +28,11 @@ import { ConfirmDialog, Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import {
-  useDeactivateUser,
-  useEnums,
-  useReactivateUser,
-  useUsers,
-} from "@/lib/queries";
-import { useForceLogout, useResetMfa } from "@/lib/mutations";
-import type { User } from "@/lib/types";
-import { formatDate, humanise } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useDeactivateUser, useReactivateUser, useUsers } from "@/features/users";
+import { useForceLogout, useResetMfa } from "@/features/users";
+import type { User } from "@/types";
+import { formatDate, humanise } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 export default function UsersPage() {

@@ -17,9 +17,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 
-import { apiGet, apiPost, setUnauthenticatedHandler } from "@/lib/api-client";
-import { ApiError } from "@/lib/api-error";
-import type { Me, Role } from "@/lib/types";
+import { apiGet, apiPost, setUnauthenticatedHandler } from "@/lib/api";
+import { ApiError } from "@/lib/errors";
+import type { Me, Role } from "@/types";
 
 interface AuthContextValue {
   me: Me | null;

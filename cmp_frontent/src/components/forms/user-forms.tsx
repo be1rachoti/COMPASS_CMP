@@ -24,9 +24,9 @@ import { z } from "zod";
 import { FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Input, Select, Textarea } from "@/components/ui/primitives";
-import { useChangeRole, useCreateUser, useUpdateUser } from "@/lib/mutations";
-import { useEnums } from "@/lib/queries";
-import type { User } from "@/lib/types";
+import { useChangeRole, useCreateUser, useUpdateUser } from "@/features/users";
+import { useEnums } from "@/features/meta";
+import type { User } from "@/types";
 import { useToast } from "@/providers";
 
 /* ============================================================ create / edit */

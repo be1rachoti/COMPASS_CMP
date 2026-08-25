@@ -25,8 +25,8 @@ import {
   Mono,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import type { AuditEntry } from "@/lib/types";
-import { formatDateTime, humanise } from "@/lib/utils";
+import type { AuditEntry } from "@/types";
+import { formatDateTime, humanise } from "@/lib/format";
 
 /**
  * A one-line, human reading of an event.

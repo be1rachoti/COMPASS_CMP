@@ -25,9 +25,10 @@ import {
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useAllNotices, useEnums } from "@/lib/queries";
-import type { NoticeListRow } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useAllNotices } from "@/features/notices";
+import type { NoticeListRow } from "@/types";
+import { formatDateTime } from "@/lib/format";
 
 function NoticesPageView() {
   const stack = useCursorStack();

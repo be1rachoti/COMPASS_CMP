@@ -38,10 +38,10 @@ import {
   Select,
   Skeleton,
 } from "@/components/ui/primitives";
-import { apiGet, apiPost } from "@/lib/api-client";
-import { ApiError } from "@/lib/api-error";
-import type { LanguageCode, LinkView, Purpose, ServedNotice } from "@/lib/types";
-import { formatDuration, humanise, shortHash } from "@/lib/utils";
+import { apiGet, apiPost } from "@/lib/api";
+import { ApiError } from "@/lib/errors";
+import type { LanguageCode, LinkView, Purpose, ServedNotice } from "@/types";
+import { formatDuration, humanise, shortHash } from "@/lib/format";
 
 type Step = "loading" | "invalid" | "register" | "verify" | "notice" | "done";
 

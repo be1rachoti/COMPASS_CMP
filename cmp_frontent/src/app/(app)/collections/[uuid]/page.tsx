@@ -41,8 +41,8 @@ import {
   useCollection,
   useCollectionAssets,
   useCollectionExceptions,
-} from "@/lib/queries";
-import { formatDate, formatDateTime, humanise } from "@/lib/utils";
+} from "@/features/exchange";
+import { formatDate, formatDateTime, humanise } from "@/lib/format";
 
 export default function CollectionDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();

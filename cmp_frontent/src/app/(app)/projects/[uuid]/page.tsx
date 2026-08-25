@@ -52,17 +52,17 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { ProjectProgress, StatusBadge } from "@/components/ui/status";
-import { apiDownload } from "@/lib/api-client";
+import { apiDownload } from "@/lib/api";
+import { useLinks } from "@/features/consent";
+import { useNotices } from "@/features/notices";
 import {
   useApprovals,
-  useLinks,
-  useNotices,
   useProject,
   useProjectHistory,
   useProjectSummary,
   useSites,
-} from "@/lib/queries";
-import { formatDate, formatDateTime, humanise, saveBlob, shortHash } from "@/lib/utils";
+} from "@/features/projects";
+import { formatDate, formatDateTime, humanise, saveBlob, shortHash } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 type Sheet =

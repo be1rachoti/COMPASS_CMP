@@ -28,9 +28,9 @@ import {
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useAudit, useAuditVerify } from "@/lib/queries";
-import type { AuditEntry } from "@/lib/types";
-import { formatDateTime, humanise } from "@/lib/utils";
+import { useAudit, useAuditVerify } from "@/features/audit";
+import type { AuditEntry } from "@/types";
+import { formatDateTime, humanise } from "@/lib/format";
 
 /** The 22 tables, exactly. `entity_type` is the table name and nothing else -
  *  free text would produce three spellings of the same table within a month. */

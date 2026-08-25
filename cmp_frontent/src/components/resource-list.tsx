@@ -33,8 +33,8 @@ import {
   TableSkeleton,
   Th,
 } from "@/components/ui/primitives";
-import type { ApiError } from "@/lib/api-error";
-import type { Page } from "@/lib/types";
+import type { ApiError } from "@/lib/errors";
+import type { Page } from "@/types";
 
 /** Cursor stack, plus the reset that filter changes must trigger. */
 export function useCursorStack(): {

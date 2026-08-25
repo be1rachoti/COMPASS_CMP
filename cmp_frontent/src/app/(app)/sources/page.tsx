@@ -24,9 +24,10 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Badge, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useEnums, useSources, useSuspendSource } from "@/lib/queries";
-import type { DataSource, Page } from "@/lib/types";
-import { humanise } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useSources, useSuspendSource } from "@/features/registry";
+import type { DataSource, Page } from "@/types";
+import { humanise } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 export default function SourcesPage() {

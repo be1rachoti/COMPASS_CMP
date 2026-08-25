@@ -33,8 +33,8 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import { statusLabel } from "@/components/ui/status";
-import { useTransition, useTransitions } from "@/lib/queries";
-import type { ProjectStatus, TransitionOption } from "@/lib/types";
+import { useTransition, useTransitions } from "@/features/projects";
+import type { ProjectStatus, TransitionOption } from "@/types";
 import { useToast } from "@/providers";
 
 export function TransitionControls({

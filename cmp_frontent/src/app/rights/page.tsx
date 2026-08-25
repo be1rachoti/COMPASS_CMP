@@ -16,7 +16,7 @@ import * as React from "react";
 
 import { BrandMark, SignalField } from "@/components/ui/graphics";
 import { Alert, Card, CardBody, CardHeader, CardTitle, Skeleton } from "@/components/ui/primitives";
-import { apiGet } from "@/lib/api-client";
+import { apiGet } from "@/lib/api";
 
 interface RightsPayload {
   dpo_contact: string;

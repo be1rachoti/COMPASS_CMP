@@ -21,7 +21,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios";
 
-import { ApiError, type ApiErrorBody, networkError } from "@/lib/api-error";
+import { ApiError, type ApiErrorBody, networkError } from "@/lib/errors";
 import { config } from "@/lib/config";
 
 const UNSAFE_METHODS = new Set(["post", "put", "patch", "delete"]);

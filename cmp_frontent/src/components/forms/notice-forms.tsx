@@ -27,16 +27,18 @@ import {
   Textarea,
 } from "@/components/ui/primitives";
 import {
+  type NoticeInput,
   useAttachPurpose,
   useCopyNotice,
   useCreateNotice,
   useDetachPurpose,
   useSetLanguage,
   useUpdateNotice,
-  type NoticeInput,
-} from "@/lib/mutations";
-import { useAllNotices, useEnums, useNoticePurposes, usePurposes } from "@/lib/queries";
-import type { LanguageCode, Notice } from "@/lib/types";
+} from "@/features/notices";
+import { useEnums } from "@/features/meta";
+import { useAllNotices, useNoticePurposes } from "@/features/notices";
+import { usePurposes } from "@/features/registry";
+import type { LanguageCode, Notice } from "@/types";
 import { useToast } from "@/providers";
 
 /* =================================================================== notice */

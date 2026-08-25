@@ -22,15 +22,17 @@ import { FileInput, FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Input, Mono, Select, Textarea } from "@/components/ui/primitives";
 import {
+  type MintedLink,
   useAssignAgent,
   useCreateProject,
   useCreateSite,
   useUpdateProject,
   useUploadApproval,
-  type MintedLink,
-} from "@/lib/mutations";
-import { useAssignableDcos, useEnums, useProcessors, useSources } from "@/lib/queries";
-import type { Project } from "@/lib/types";
+} from "@/features/projects";
+import { useEnums } from "@/features/meta";
+import { useAssignableDcos } from "@/features/projects";
+import { useProcessors, useSources } from "@/features/registry";
+import type { Project } from "@/types";
 import { useToast } from "@/providers";
 
 /* ================================================================== project */

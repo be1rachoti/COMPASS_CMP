@@ -22,9 +22,9 @@ import {
   EmptyState,
   Skeleton,
 } from "@/components/ui/primitives";
-import { useNotifications } from "@/lib/queries";
-import type { AuditEntry } from "@/lib/types";
-import { formatDateTime, formatRelative, humanise } from "@/lib/utils";
+import { useNotifications } from "@/features/notifications";
+import type { AuditEntry } from "@/types";
+import { formatDateTime, formatRelative, humanise } from "@/lib/format";
 
 export default function NotificationsPage() {
   const query = useNotifications();

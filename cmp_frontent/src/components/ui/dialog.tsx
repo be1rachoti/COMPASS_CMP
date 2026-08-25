@@ -14,7 +14,7 @@ import { X } from "lucide-react";
 import * as React from "react";
 
 import { Button } from "@/components/ui/primitives";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/format";
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;

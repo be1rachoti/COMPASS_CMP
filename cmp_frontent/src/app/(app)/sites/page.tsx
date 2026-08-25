@@ -22,9 +22,10 @@ import {
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { useAllSites, useEnums } from "@/lib/queries";
-import type { SiteListRow } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useAllSites } from "@/features/projects";
+import type { SiteListRow } from "@/types";
+import { formatDate } from "@/lib/format";
 
 export default function SitesPage() {
   const stack = useCursorStack();

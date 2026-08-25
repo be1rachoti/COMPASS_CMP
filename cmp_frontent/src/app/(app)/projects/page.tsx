@@ -31,8 +31,9 @@ import {
 import { ProjectForm } from "@/components/forms/project-forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status";
-import { useEnums, useProjects } from "@/lib/queries";
-import { formatDateTime } from "@/lib/utils";
+import { useEnums } from "@/features/meta";
+import { useProjects } from "@/features/projects";
+import { formatDateTime } from "@/lib/format";
 import { useAuth } from "@/providers";
 
 function ProjectsPageView() {

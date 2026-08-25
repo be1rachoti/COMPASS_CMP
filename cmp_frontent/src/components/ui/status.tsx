@@ -25,7 +25,7 @@ import type {
   RecordStatus,
   Role,
   UserStatus,
-} from "@/lib/types";
+} from "@/types";
 
 import { Pipeline } from "./charts";
 import { Badge, type BadgeProps } from "./primitives";

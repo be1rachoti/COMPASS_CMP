@@ -53,10 +53,10 @@ import {
   useNoticeLanguages,
   useNoticePurposes,
   usePublishNotice,
-} from "@/lib/queries";
-import { useApproveLanguage } from "@/lib/mutations";
-import type { LanguageCode } from "@/lib/types";
-import { formatDateTime, formatDuration, humanise, shortHash } from "@/lib/utils";
+} from "@/features/notices";
+import { useApproveLanguage } from "@/features/notices";
+import type { LanguageCode } from "@/types";
+import { formatDateTime, formatDuration, humanise, shortHash } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 export default function NoticeDetailPage() {

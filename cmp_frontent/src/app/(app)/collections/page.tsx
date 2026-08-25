@@ -21,9 +21,9 @@ import { PageHeader } from "@/components/app-shell";
 import { ResourceList, useCursorStack } from "@/components/resource-list";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Td, Tr } from "@/components/ui/primitives";
-import { useAllCollections } from "@/lib/queries";
-import type { CollectionListRow } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { useAllCollections } from "@/features/exchange";
+import type { CollectionListRow } from "@/types";
+import { formatDate } from "@/lib/format";
 
 export default function CollectionsPage() {
   const stack = useCursorStack();

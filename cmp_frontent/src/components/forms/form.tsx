@@ -29,8 +29,8 @@ import {
 import type { ZodType } from "zod";
 
 import { Alert } from "@/components/ui/primitives";
-import { ApiError } from "@/lib/api-error";
-import { formatBytes } from "@/lib/utils";
+import { ApiError } from "@/lib/errors";
+import { formatBytes } from "@/lib/format";
 
 export interface ApiFormResult<T extends FieldValues> extends UseFormReturn<T> {
   /** Error that belongs to the form as a whole, not to one field. */

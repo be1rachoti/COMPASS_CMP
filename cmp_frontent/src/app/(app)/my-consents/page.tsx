@@ -42,9 +42,9 @@ import {
   useMyConsents,
   useMyDisclosures,
   useWithdraw,
-} from "@/lib/queries";
-import type { MyConsent } from "@/lib/types";
-import { formatDateTime, formatDuration, humanise, shortHash } from "@/lib/utils";
+} from "@/features/my-consents";
+import type { MyConsent } from "@/types";
+import { formatDateTime, formatDuration, humanise, shortHash } from "@/lib/format";
 import { useToast } from "@/providers";
 
 export default function MyConsentsPage() {
