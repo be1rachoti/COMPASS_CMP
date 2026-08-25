@@ -95,6 +95,11 @@ ignore = [
 "src/cmp/api/routers/dashboard.py" = ["S608"]
 
 "tests/*" = ["S105", "S106", "S311", "S608"]
+
+# The operator scripts are command-line tools. `print` and `sys.stdout.write` are
+# their entire user interface, so T201 is not a finding there — a structured log
+# line is the wrong medium for "here are the seeded accounts".
+"scripts/*" = ["T201"]
 # The GRANT statements interpolate a role *name*, because GRANT accepts no bind
 # parameter. It comes from a module constant or an operator-set environment
 # variable - never a request - and PL/pgSQL's format(%I) quotes it as an

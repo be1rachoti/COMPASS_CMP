@@ -178,7 +178,10 @@ jobs:
       - name: Build
         uses: docker/build-push-action@v6
         with:
+          # The Dockerfile moved under docker/; the context stays at the repo
+          # root because that is where src/ and the lockfile are.
           context: .
+          file: docker/Dockerfile
           push: false
           load: true
           tags: cmp-api:${{ github.sha }}

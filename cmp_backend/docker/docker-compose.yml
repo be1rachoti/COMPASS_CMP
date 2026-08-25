@@ -46,7 +46,7 @@ services:
       - max_connections=100
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
@@ -83,7 +83,8 @@ services:
 
   migrate:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       target: runtime
     environment: *api-env
     command: ["alembic", "upgrade", "head"]
@@ -93,7 +94,8 @@ services:
 
   api:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       target: runtime
     environment: *api-env
     depends_on:
@@ -115,7 +117,8 @@ services:
 
   worker:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       target: runtime
     environment: *api-env
     # Dedicated queues so a slow report cannot delay an OTP email.
@@ -145,7 +148,8 @@ services:
 
   beat:
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       target: runtime
     environment: *api-env
     # Exactly one Beat. Two schedulers produce duplicate scheduled work, and a
@@ -175,8 +179,8 @@ services:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 15s

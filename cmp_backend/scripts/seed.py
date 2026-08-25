@@ -125,7 +125,7 @@ async def seed() -> None:
             )
 
             purposes = []
-            for code, name, desc, uses, cats, days, mandatory in [
+            for code, name, desc, uses, cats, days, _mandatory in [
                 ("PUR-GAIT-TRAIN", "Gait model training",
                  "Building and evaluating gait-based identification models.",
                  "Train, validate and benchmark models. No decisions are made about you.",
@@ -252,7 +252,7 @@ async def seed() -> None:
 
             # ----------------------------------------------------- consent link
             raw_token = new_token(32)
-            link = await fetch_one(
+            await fetch_one(
                 conn,
                 """INSERT INTO consent_link (notice_id, site_id, token, expires_at,
                                              max_uses, created_by)
