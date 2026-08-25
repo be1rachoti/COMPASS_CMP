@@ -25,6 +25,9 @@ from celery.exceptions import SoftTimeLimitExceeded
 
 from cmp.core.config import settings
 from cmp.core.logging import get_logger
+from cmp.infrastructure.email import build_email_transport
+from cmp.infrastructure.email.transport import obscure
+from cmp.infrastructure.sms import build_sms_transport
 
 log = get_logger("cmp.tasks.notifications")
 
@@ -41,70 +44,19 @@ RETRY_KW: dict[str, Any] = {
 
 
 def _deliver(*, channel: str, to: str, subject: str, body: str) -> dict[str, Any]:
-    """The single outbound seam.
+    """Hand a message to the transport this environment is configured for.
 
-    Real deployments replace this with SES, Twilio or an internal relay. Whatever
-    it becomes, it must keep these properties:
+    The transport itself lives in `cmp.infrastructure` — swapping the console
+    outbox for SMTP is a setting, not an edit here. What stays with the task is
+    the retry policy, because Celery owns retries and two policies disagreeing
+    about how many attempts is too many is worse than one.
 
-    * an explicit timeout - never infinite (checklist §13);
-    * no secret in the log - the code itself is never logged, only the fact of
-      delivery and the obscured recipient;
-    * a raised exception on failure, so the retry policy above applies.
+    Failure propagates. A transport that swallowed an error and returned quietly
+    would turn a retryable outage into silent data loss.
     """
-    _write_dev_outbox(channel=channel, to=to, subject=subject, body=body)
-
-    log.info(
-        "notification.delivered",
-        channel=channel,
-        to=_obscure(to),
-        subject=subject,
-        transport="stdout",  # replace in deployment
-        timeout_s=settings.external_http_timeout_s,
-    )
-    return {"channel": channel, "delivered": True}
-
-
-def _write_dev_outbox(*, channel: str, to: str, subject: str, body: str) -> None:
-    """Local mail catcher, so a developer can read the code they were just sent.
-
-    OTP codes are deliberately absent from the logs - that is the point of
-    hashing them - which makes the local sign-in loop impossible to complete
-    without somewhere to look. This is that somewhere, and it is the same idea as
-    running MailHog next to a dev stack.
-
-    Hard-gated on environment, and gated again on a filesystem write: production
-    must never accumulate a plaintext file of verification codes. The guard is
-    first, before anything is formatted, so there is no path where a production
-    process does the work and then discards it.
-    """
-    if settings.is_production or settings.environment == "staging":
-        return
-
-    try:
-        from datetime import UTC, datetime
-        from pathlib import Path
-
-        outbox = Path(settings.upload_root).parent / "outbox.log"
-        outbox.parent.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(UTC).isoformat(timespec="seconds")
-        entry = (
-            f"\n{'=' * 78}\n"
-            f"{stamp}  [{channel}]  to: {to}\n"
-            f"subject: {subject}\n{'-' * 78}\n{body}\n"
-        )
-        with outbox.open("a", encoding="utf-8") as handle:
-            handle.write(entry)
-    except OSError as exc:  # pragma: no cover - a dev convenience, never fatal
-        log.warning("notification.outbox_unavailable", error=str(exc))
-
-
-def _obscure(contact: str) -> str:
-    """Enough to support a delivery query, not enough to be a contact list."""
-    if "@" in contact:
-        name, _, domain = contact.partition("@")
-        head = name[:2] if len(name) > 2 else name[:1]
-        return f"{head}***@{domain}"
-    return f"***{contact[-3:]}" if len(contact) > 3 else "***"
+    if channel == "sms":
+        return dict(build_sms_transport().send(to=to, body=body))
+    return dict(build_email_transport().send(to=to, subject=subject, body=body))
 
 
 @shared_task(name="cmp.notifications.send_mfa_code", **RETRY_KW)
@@ -226,7 +178,7 @@ def notify_project_event(
                 _deliver(channel="email", to=address, subject=subject, body=body)
                 delivered += 1
             except (ConnectionError, TimeoutError, OSError) as exc:
-                failed.append({"to": _obscure(address), "error": type(exc).__name__})
+                failed.append({"to": obscure(address), "error": type(exc).__name__})
     except SoftTimeLimitExceeded:
         log.warning("notification.batch_timed_out", delivered=delivered,
                     remaining=len(recipients) - delivered)

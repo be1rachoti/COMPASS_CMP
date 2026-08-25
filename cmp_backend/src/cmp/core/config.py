@@ -106,6 +106,27 @@ class Settings(BaseSettings):
     external_http_timeout_s: float = 10.0     # never infinite — checklist §13
     external_http_retries: int = 3
 
+    # ------------------------------------------------------------- transports
+    # Which adapter each seam in `cmp.infrastructure` uses. All three default to
+    # the local, non-delivering option on purpose: a misconfigured staging box
+    # that quietly writes to a file is a far better failure than one that starts
+    # emailing and texting real people the first time somebody signs in.
+    email_transport: Literal["console", "smtp", "null"] = "console"
+    sms_transport: Literal["console", "null"] = "console"
+    storage_backend: Literal["local", "object"] = "local"
+
+    smtp_host: str = "localhost"
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_use_tls: bool = True
+
+    # Object storage. The reference recorded in the database stays relative, so
+    # bucket and region live here and never reach a table that gets exported.
+    storage_bucket: str = ""
+    storage_prefix: str = ""
+    storage_region: str | None = None
+
     # ---------------------------------------------------------------- logging
     log_level: str = "INFO"
     log_json: bool = True

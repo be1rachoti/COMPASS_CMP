@@ -30,8 +30,8 @@ from cmp.domain import audit
 from cmp.domain import consent as consent_service
 from cmp.domain import projects as service
 from cmp.domain.audit import Event
+from cmp.infrastructure.storage import read_upload, save_approval_proof
 from cmp.schemas.common import Acknowledged, LongText, Out, Page, Schema, ShortText
-from cmp.storage import read_upload, save_upload
 
 router = APIRouter(tags=["projects"])
 
@@ -361,7 +361,7 @@ async def add_approval(
         )
 
     digest = file_hash(payload)
-    stored = save_upload(payload, subdir="approvals", suggested_name=proof.filename or "proof")
+    stored = save_approval_proof(payload, proof.filename)
 
     async with transaction() as conn:
         return await service.add_approval(
