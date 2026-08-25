@@ -25,6 +25,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME \
     NEXT_TELEMETRY_DISABLED=1
 
+# Standalone output is opt-in: it is what this image is built around, and it
+# gets in the way of a local `next start`. See next.config.ts.
+ENV NEXT_OUTPUT=standalone
 RUN npm run build
 
 FROM node:22-alpine AS runtime

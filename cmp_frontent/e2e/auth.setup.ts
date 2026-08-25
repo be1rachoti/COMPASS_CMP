@@ -41,22 +41,36 @@ const PASSWORD_ONLY = [
 
 const MFA_ROLES = [{ role: "dpo", login: "dpo@cmp.local" }];
 
-/** The dev outbox the API writes one-time codes to. Absent in a real deployment. */
-const OUTBOX = process.env.E2E_OUTBOX ?? path.join(__dirname, "..", "..", "cmp_backend", "outbox");
+/**
+ * The dev outbox the API writes one-time codes to.
+ *
+ * A single append-only *file*, not a directory of messages — the console
+ * transport writes one log. Getting that wrong is what produced the original
+ * failure: `readdirSync` on a file throws ENOTDIR, the catch swallowed it, and
+ * the message said "no code in the dev outbox", which was true and useless.
+ *
+ * Only exists in a local deployment; a real one sends mail. Absence is why the
+ * MFA roles skip rather than fail.
+ */
+const OUTBOX =
+  process.env.E2E_OUTBOX ??
+  path.join(__dirname, "..", "..", "cmp_backend", "var", "outbox.log");
+
+/** Why no code was found. Kept so the failure message can say something. */
+let outboxProblem = "not read yet";
 
 function latestCode(): string | null {
   try {
-    const files = fs
-      .readdirSync(OUTBOX)
-      .map((f) => ({ f, t: fs.statSync(path.join(OUTBOX, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t);
-    for (const { f } of files.slice(0, 5)) {
-      const body = fs.readFileSync(path.join(OUTBOX, f), "utf8");
-      const match = body.match(/\b(\d{6})\b/);
+    // Newest last, so read backwards: several codes accumulate over a run and
+    // only the most recent one is still valid.
+    const lines = fs.readFileSync(OUTBOX, "utf8").split(/\r?\n/).reverse();
+    for (const line of lines) {
+      const match = /\b(\d{6})\b/.exec(line);
       if (match) return match[1];
     }
-  } catch {
-    return null;
+    outboxProblem = `read ${OUTBOX} (${lines.length} lines), no six-digit code in it`;
+  } catch (error) {
+    outboxProblem = `could not read ${OUTBOX}: ${(error as Error).message}`;
   }
   return null;
 }
@@ -92,8 +106,11 @@ for (const { role, login } of MFA_ROLES) {
       // The code is written after the response returns, so it may not be on
       // disk the instant this runs.
       await expect
-        .poll(() => latestCode(), { timeout: 10_000, message: "no code in the dev outbox" })
-        .not.toBeNull();
+        .poll(() => latestCode(), { timeout: 10_000 })
+        .not.toBeNull()
+        .catch(() => {
+          throw new Error(`no MFA code available: ${outboxProblem}`);
+        });
 
       await page.getByLabel(/digit code/i).fill(latestCode()!);
       await page.getByRole("button", { name: /verify and continue/i }).click();

@@ -84,3 +84,34 @@ export interface PasswordChange {
 export function changePassword(body: PasswordChange): Promise<Acknowledged> {
   return apiPost<Acknowledged>("/auth/password/change", body);
 }
+
+/**
+ * Ask for a reset code.
+ *
+ * Answers the same way whether the address is registered or not — which is why
+ * the confirmation screen says "if that address is registered" rather than
+ * "check your email". Saying the latter would confirm the account exists to
+ * anybody who types an address in.
+ */
+export function requestPasswordReset(body: { email: string }): Promise<Acknowledged> {
+  return apiPost<Acknowledged>("/auth/password/reset/request", body);
+}
+
+export interface PasswordResetConfirm {
+  email: string;
+  /** The code from the email. Digits only, 4-10 of them. */
+  code: string;
+  new_password: string;
+}
+
+/**
+ * Set a new password with the code.
+ *
+ * The email is sent again alongside the code because the code alone is not an
+ * identifier — the server needs both to know whose password is being set, and
+ * requiring the pair means a leaked code is useless without knowing the account
+ * it belongs to.
+ */
+export function confirmPasswordReset(body: PasswordResetConfirm): Promise<Acknowledged> {
+  return apiPost<Acknowledged>("/auth/password/reset/confirm", body);
+}

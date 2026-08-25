@@ -209,8 +209,10 @@ test.describe("session cookie", () => {
     await signIn(page);
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
 
-    await page.getByRole("button", { name: /account|profile|menu/i }).first().click();
-    await page.getByRole("menuitem", { name: /sign out/i }).click();
+    // Sign out is a button in the sidebar, not an item behind an account menu.
+    // Worth stating because the reverse is the more common pattern and this test
+    // originally assumed it.
+    await page.getByRole("button", { name: /^sign out$/i }).first().click();
     await expect(page).toHaveURL(/\/sign-in/, { timeout: 10_000 });
 
     // Not just cleared client-side: going back to a protected route has to

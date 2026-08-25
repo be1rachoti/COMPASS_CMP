@@ -13,7 +13,7 @@
 
 import { z } from "zod";
 
-import { contact, mobile } from "@/schemas/contacts";
+import { contact, email, mobile } from "@/schemas/contacts";
 import { optional, shortText } from "@/schemas/primitives";
 import { otpCode, password, passwordWithConfirmation } from "@/schemas/security";
 
@@ -108,3 +108,46 @@ export const personTypeSchema = z.object({
 });
 
 export type PersonTypeValues = z.infer<typeof personTypeSchema>;
+
+/**
+ * Asking for a reset code.
+ *
+ * The address is validated here — unlike the sign-in form, which deliberately
+ * is not. The difference is what a mistake costs: a typo in sign-in produces a
+ * "wrong credentials" message the person can act on, while a typo here produces
+ * silence, because the server answers identically whether the address is
+ * registered or not. Catching the typo before it is sent is the only chance to
+ * catch it at all.
+ */
+export const resetRequestSchema = z.object({
+  email,
+});
+
+export type ResetRequestValues = z.infer<typeof resetRequestSchema>;
+
+/**
+ * Setting the new password with the code.
+ *
+ * The full policy applies here, and it leaks nothing: the person is holding a
+ * code that was sent to their own address, so telling them the minimum length
+ * tells them nothing they should not know — and finding out after submitting
+ * would mean re-entering it twice.
+ */
+export const resetConfirmSchema = z
+  .object({
+    email,
+    code: otpCode,
+    new_password: password,
+    confirm_password: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.new_password !== value.confirm_password) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirm_password"],
+        message: "The two passwords do not match",
+      });
+    }
+  });
+
+export type ResetConfirmValues = z.infer<typeof resetConfirmSchema>;

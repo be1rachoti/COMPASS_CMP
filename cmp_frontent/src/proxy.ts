@@ -1,5 +1,9 @@
 /**
- * Edge middleware — the first thing that touches a request.
+ * The proxy — the first thing that touches a request.
+ *
+ * Named `proxy.ts` because Next 16 renamed the convention; `middleware.ts` still
+ * works and prints a deprecation warning on every build. The export below keeps
+ * the framework's expected name.
  *
  * Two jobs, and it is important to be clear about what each one is *for*:
  *
@@ -95,7 +99,7 @@ function contentSecurityPolicy(nonce: string, isDev: boolean): string {
     .join("; ");
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (shouldSkip(pathname)) {
