@@ -16,22 +16,14 @@ import * as React from "react";
 
 import { BrandMark, SignalField } from "@/components/ui/graphics";
 import { Alert, Card, CardBody, CardHeader, CardTitle, Skeleton } from "@/components/ui/primitives";
-import { apiGet } from "@/lib/api";
-
-interface RightsPayload {
-  dpo_contact: string;
-  how_to_exercise: Array<{ right: string; section: string; description: string }>;
-  withdraw_consent: string;
-  response_time: string;
-  board_complaint: string;
-}
+import { getRights, type RightsPayload } from "@/features/rights";
 
 export default function RightsPage() {
   const [data, setData] = React.useState<RightsPayload | null>(null);
   const [failed, setFailed] = React.useState(false);
 
   React.useEffect(() => {
-    apiGet<RightsPayload>("/rights")
+    getRights()
       .then(setData)
       .catch(() => setFailed(true));
   }, []);

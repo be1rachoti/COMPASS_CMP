@@ -12,7 +12,7 @@ import * as React from "react";
 
 import { AuthLayout } from "@/components/layout/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
-import { apiPost } from "@/lib/api";
+import { resendMfa, verifyMfa } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
 import { useAuth } from "@/providers";
 
@@ -34,7 +34,7 @@ export default function VerifyPage() {
     setError(null);
     setNotice(null);
     try {
-      await apiPost("/auth/mfa/verify", { code });
+      await verifyMfa({ code });
       await refresh();
       router.replace("/dashboard");
     } catch (err) {
@@ -62,7 +62,7 @@ export default function VerifyPage() {
     setResending(true);
     setError(null);
     try {
-      await apiPost("/auth/mfa/resend");
+      await resendMfa();
       setNotice("A new code has been sent. The previous one no longer works.");
       setCode("");
     } catch (err) {

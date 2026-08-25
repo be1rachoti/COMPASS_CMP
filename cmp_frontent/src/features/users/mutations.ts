@@ -4,50 +4,50 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPost, apiPatch, http } from "@/lib/api";
+
+import {
+  changeUserRole,
+  createUser,
+  deactivateUser,
+  forceLogout,
+  reactivateUser,
+  resetMfa,
+  updateUser,
+  type UserInput,
+} from "@/features/users/api";
 import type { ApiError } from "@/lib/errors";
-import type { Result } from "@/lib/query";
+import { keys, type Result } from "@/lib/query";
 import type { Acknowledged, User, Uuid } from "@/types";
 
 export function useDeactivateUser() {
   const qc = useQueryClient();
-  return useMutation<{ ok: boolean; message?: string }, ApiError, Uuid>({
-    mutationFn: (uuid) => apiPost(`/users/${uuid}/deactivate`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  return useMutation<Acknowledged, ApiError, Uuid>({
+    mutationFn: deactivateUser,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users.list() }),
   });
 }
 
 export function useReactivateUser() {
   const qc = useQueryClient();
-  return useMutation<{ ok: boolean; message?: string }, ApiError, Uuid>({
-    mutationFn: (uuid) => apiPost(`/users/${uuid}/reactivate`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  return useMutation<Acknowledged, ApiError, Uuid>({
+    mutationFn: reactivateUser,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users.list() }),
   });
-}
-
-export interface UserInput {
-  full_name: string;
-  email: string;
-  role: string;
-  username?: string | null;
-  mobile?: string | null;
-  organization_id?: string | null;
-  person_type?: string | null;
 }
 
 export function useCreateUser(): Result<User, UserInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<User>("/users", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    mutationFn: createUser,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users.list() }),
   });
 }
 
 export function useUpdateUser(uuid: Uuid): Result<User, Partial<UserInput>> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPatch<User>(`/users/${uuid}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    mutationFn: (body: Partial<UserInput>) => updateUser(uuid, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users.list() }),
   });
 }
 
@@ -56,22 +56,24 @@ export function useChangeRole(
 ): Result<Acknowledged, { role: string; reason?: string }> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Acknowledged>(`/users/${uuid}/role`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+    mutationFn: (body: { role: string; reason?: string }) => changeUserRole(uuid, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users.list() }),
   });
 }
 
 export function useResetMfa(): Result<Acknowledged, Uuid> {
   return useMutation({
-    mutationFn: (uuid) => apiPost<Acknowledged>(`/users/${uuid}/mfa/reset`),
+    mutationFn: resetMfa,
   });
 }
 
+/**
+ * End every session this user holds.
+ *
+ * The response to a lost laptop, so it deliberately does not invalidate the
+ * user list: nothing about the account row changed, and refetching would
+ * suggest to the administrator that something did.
+ */
 export function useForceLogout(): Result<Acknowledged, Uuid> {
-  return useMutation({
-    mutationFn: async (uuid) => {
-      const { data } = await http.delete<Acknowledged>(`/users/${uuid}/sessions`);
-      return data;
-    },
-  });
+  return useMutation({ mutationFn: forceLogout });
 }

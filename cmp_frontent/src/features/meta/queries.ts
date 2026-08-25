@@ -4,7 +4,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "@/lib/api";
+
+import { getEnums, listDataCategories } from "@/features/meta/api";
 import type { ApiError } from "@/lib/errors";
 import { keys, type Options } from "@/lib/query";
 import type { DataCategory, EnumMap } from "@/types";
@@ -12,7 +13,7 @@ import type { DataCategory, EnumMap } from "@/types";
 export function useEnums(options?: Options<EnumMap>) {
   return useQuery<EnumMap, ApiError>({
     queryKey: keys.meta.enums,
-    queryFn: () => apiGet<EnumMap>("/meta/enums"),
+    queryFn: () => getEnums(),
     // Reference data. It changes when the backend deploys, not while somebody
     // is filling in a form.
     staleTime: 60 * 60_000,
@@ -23,7 +24,7 @@ export function useEnums(options?: Options<EnumMap>) {
 export function useDataCategories() {
   return useQuery<{ items: DataCategory[] }, ApiError>({
     queryKey: keys.meta.dataCategories,
-    queryFn: () => apiGet<{ items: DataCategory[] }>("/meta/data-categories"),
+    queryFn: () => listDataCategories(),
     staleTime: 60 * 60_000,
   });
 }

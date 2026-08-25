@@ -1,47 +1,79 @@
 /**
  * Writing projects, sites, agent assignments and approvals.
+ *
+ * The request is in `api.ts`; what each hook owns is **what the write
+ * invalidates**. That is the part worth reading closely, and the part that goes
+ * wrong: a create that does not invalidate its list leaves somebody looking at
+ * a screen that does not show the thing they just made, and the usual "fix" is
+ * a page reload, which hides the bug rather than removing it.
+ *
+ * No mutation retries. These write to append-only tables — a retried export
+ * would produce a second set of `export_line` rows and corrupt the disclosure
+ * record — and the shared query client sets `retry: false` for mutations. It is
+ * restated here because it is load-bearing, not incidental.
  */
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPost, apiPut, http } from "@/lib/api";
-import type { ApiError } from "@/lib/errors";
-import { keys, type Result } from "@/lib/query";
+
+import {
+  assignAgent,
+  assignDco,
+  closeProject,
+  createProject,
+  createSite,
+  deactivateSite,
+  requestTransition,
+  updateProject,
+  updateSite,
+  uploadApproval,
+  type AgentInput,
+  type ApprovalUpload,
+  type MintedLink,
+  type ProjectInput,
+  type SiteInput,
+  type TransitionInput,
+  type TransitionResult,
+} from "@/features/projects/api";
+import { keys, prefixes, type Result } from "@/lib/query";
 import type { Acknowledged, Project, Site, Uuid } from "@/types";
 
-export function useTransition(projectUuid: Uuid) {
+export type {
+  AgentInput,
+  ApprovalUpload,
+  MintedLink,
+  ProjectInput,
+  SiteInput,
+  TransitionInput,
+};
+
+/**
+ * A lifecycle transition.
+ *
+ * Invalidates broadly on purpose: a transition can publish a notice, move the
+ * project between queues, change which transitions are available next, and
+ * alter the dashboard's counts. Enumerating those precisely is how one gets
+ * forgotten.
+ */
+export function useTransition(projectUuid: Uuid): Result<TransitionResult, TransitionInput> {
   const qc = useQueryClient();
-  return useMutation<
-    { from: string; to: string; occurred_at: string },
-    ApiError,
-    { to: string; reason?: string }
-  >({
-    mutationFn: (body) => apiPost(`/projects/${projectUuid}/transition`, body),
+  return useMutation({
+    mutationFn: (body: TransitionInput) => requestTransition(projectUuid, body),
     onSuccess: () => {
-      // A transition can publish a notice, change the queue a project sits in,
-      // and alter what the dashboard shows. Invalidate broadly.
-      void qc.invalidateQueries({ queryKey: ["project", projectUuid] });
-      void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: keys.project.detail(projectUuid) });
+      void qc.invalidateQueries({ queryKey: keys.project.list() });
       void qc.invalidateQueries({ queryKey: keys.dashboard.all });
     },
   });
 }
 
-export interface ProjectInput {
-  project_name: string;
-  description: string;
-  dco_user_uuid: string;
-  internal_project_name?: string | null;
-  requesting_team?: string | null;
-}
-
 export function useCreateProject(): Result<Project, ProjectInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Project>("/projects", body),
+    mutationFn: createProject,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-      void qc.invalidateQueries({ queryKey: ["dashboard"] });
+      void qc.invalidateQueries({ queryKey: keys.project.list() });
+      void qc.invalidateQueries({ queryKey: keys.dashboard.all });
     },
   });
 }
@@ -49,10 +81,10 @@ export function useCreateProject(): Result<Project, ProjectInput> {
 export function useUpdateProject(uuid: Uuid): Result<Project, Partial<ProjectInput>> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPut<Project>(`/projects/${uuid}`, body),
+    mutationFn: (body: Partial<ProjectInput>) => updateProject(uuid, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["project", uuid] });
-      void qc.invalidateQueries({ queryKey: ["projects"] });
+      void qc.invalidateQueries({ queryKey: keys.project.detail(uuid) });
+      void qc.invalidateQueries({ queryKey: keys.project.list() });
     },
   });
 }
@@ -60,40 +92,32 @@ export function useUpdateProject(uuid: Uuid): Result<Project, Partial<ProjectInp
 export function useAssignDco(uuid: Uuid): Result<Acknowledged, { dco_user_uuid: string }> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Acknowledged>(`/projects/${uuid}/dco`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project", uuid] }),
+    mutationFn: (body: { dco_user_uuid: string }) => assignDco(uuid, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.project.detail(uuid) });
+    },
   });
 }
 
 export function useCloseProject(uuid: Uuid): Result<Acknowledged, { reason?: string }> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Acknowledged>(`/projects/${uuid}/close`, body),
+    mutationFn: (body: { reason?: string }) => closeProject(uuid, body),
     onSuccess: () => {
-      // Closing revokes every live link, so the link views are stale too.
-      void qc.invalidateQueries({ queryKey: ["project", uuid] });
-      void qc.invalidateQueries({ queryKey: ["projects"] });
-      void qc.invalidateQueries({ queryKey: ["all", "links"] });
+      void qc.invalidateQueries({ queryKey: keys.project.detail(uuid) });
+      void qc.invalidateQueries({ queryKey: keys.project.list() });
+      void qc.invalidateQueries({ queryKey: keys.dashboard.all });
     },
   });
-}
-
-export interface SiteInput {
-  site_label: string;
-  location?: string | null;
-  processor_uuid?: string | null;
-  /** The data source that will report from this site. Must belong to the same
-   *  processor — the API refuses the pair otherwise. */
-  source_uuid?: string | null;
 }
 
 export function useCreateSite(projectUuid: Uuid): Result<Site, SiteInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Site>(`/projects/${projectUuid}/sites`, body),
+    mutationFn: (body: SiteInput) => createSite(projectUuid, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["project", projectUuid] });
-      void qc.invalidateQueries({ queryKey: ["all", "sites"] });
+      void qc.invalidateQueries({ queryKey: keys.project.sites(projectUuid) });
+      void qc.invalidateQueries({ queryKey: keys.project.allSites() });
     },
   });
 }
@@ -101,10 +125,12 @@ export function useCreateSite(projectUuid: Uuid): Result<Site, SiteInput> {
 export function useUpdateSite(uuid: Uuid): Result<Site, Partial<SiteInput>> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPut<Site>(`/sites/${uuid}`, body),
+    mutationFn: (body: Partial<SiteInput>) => updateSite(uuid, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["all", "sites"] });
-      void qc.invalidateQueries({ queryKey: ["project"] });
+      // The site's own project is not known here, so invalidate the prefix
+      // rather than guess. One extra refetch beats a stale row.
+      void qc.invalidateQueries({ queryKey: prefixes.anyProject });
+      void qc.invalidateQueries({ queryKey: keys.project.allSites() });
     },
   });
 }
@@ -112,70 +138,41 @@ export function useUpdateSite(uuid: Uuid): Result<Site, Partial<SiteInput>> {
 export function useDeactivateSite(): Result<Acknowledged, Uuid> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (uuid) => apiPost<Acknowledged>(`/sites/${uuid}/deactivate`),
+    mutationFn: deactivateSite,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["all", "sites"] });
-      void qc.invalidateQueries({ queryKey: ["all", "links"] });
-      void qc.invalidateQueries({ queryKey: ["project"] });
+      void qc.invalidateQueries({ queryKey: prefixes.anyProject });
+      void qc.invalidateQueries({ queryKey: keys.project.allSites() });
     },
   });
-}
-
-export interface AgentInput {
-  expires_at: string;
-  max_uses?: number | null;
-  agent_ref?: string | null;
-}
-
-export interface MintedLink {
-  link_uuid: Uuid;
-  /** Returned once and never again - the database stores only its keyed digest. */
-  token: string;
-  url_path: string;
-  expires_at: string;
-  max_uses: number | null;
-  warning: string;
 }
 
 export function useAssignAgent(siteUuid: Uuid): Result<MintedLink, AgentInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<MintedLink>(`/sites/${siteUuid}/agent`, body),
+    mutationFn: (body: AgentInput) => assignAgent(siteUuid, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["all", "links"] });
-      void qc.invalidateQueries({ queryKey: ["all", "sites"] });
-      void qc.invalidateQueries({ queryKey: ["project"] });
+      void qc.invalidateQueries({ queryKey: prefixes.anyProject });
+      void qc.invalidateQueries({ queryKey: keys.consent.allLinks() });
     },
   });
 }
 
-export interface ApprovalUpload {
-  approval_type: string;
-  reference_no: string;
-  approved_on: string;
-  proof: File;
-}
-
+/**
+ * Upload an approval with its proof.
+ *
+ * The third invalidation is the one that is easy to miss: an approval with
+ * proof unblocks `under_process -> pending_approval`, so the transition view is
+ * stale the moment this succeeds. Without it the user uploads a document and
+ * the button they were trying to unblock stays disabled.
+ */
 export function useUploadApproval(projectUuid: Uuid): Result<unknown, ApprovalUpload> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input) => {
-      const body = new FormData();
-      body.append("approval_type", input.approval_type);
-      body.append("reference_no", input.reference_no);
-      body.append("approved_on", input.approved_on);
-      body.append("proof", input.proof);
-      // Content-Type is deliberately unset: the browser must add the multipart
-      // boundary itself, and the client strips the JSON default for FormData.
-      const { data } = await http.post(`/projects/${projectUuid}/approvals`, body);
-      return data;
-    },
+    mutationFn: (input: ApprovalUpload) => uploadApproval(projectUuid, input),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["project", projectUuid] });
-      void qc.invalidateQueries({ queryKey: ["all", "approvals"] });
-      // An approval with proof unblocks under_process -> pending_approval, so
-      // the transition view is stale the moment this succeeds.
-      void qc.invalidateQueries({ queryKey: ["project", projectUuid, "transitions"] });
+      void qc.invalidateQueries({ queryKey: keys.project.approvals(projectUuid) });
+      void qc.invalidateQueries({ queryKey: keys.project.allApprovals() });
+      void qc.invalidateQueries({ queryKey: keys.project.transitions(projectUuid) });
     },
   });
 }

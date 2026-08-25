@@ -5,5 +5,6 @@
  * hook between `queries` and `mutations` is not a tree-wide rewrite.
  */
 
+export * from "@/features/my-consents/api";
 export * from "@/features/my-consents/queries";
 export * from "@/features/my-consents/mutations";

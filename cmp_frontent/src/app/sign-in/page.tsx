@@ -25,10 +25,9 @@ import { z } from "zod";
 
 import { AuthLayout } from "@/components/layout/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
-import { apiPost } from "@/lib/api";
+import { requestOtp, signInWithPassword, verifyOtp } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
 import { safeRedirectPath } from "@/lib/security";
-import type { LoginResponse } from "@/types";
 import { useAuth } from "@/providers";
 
 const passwordSchema = z.object({
@@ -154,7 +153,7 @@ function StaffForm() {
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
-      const result = await apiPost<LoginResponse>("/auth/login", values);
+      const result = await signInWithPassword(values);
 
       if (result.mfa_required) {
         // The partial session is already set as a cookie. The verify screen is
@@ -249,7 +248,7 @@ function SubjectForm() {
     // or not the contact is registered, so that this form cannot be used to
     // discover who consented to a project.
     try {
-      await apiPost("/auth/otp/request", values);
+      await requestOtp(values);
     } catch {
       // Even a failure must not distinguish. A network error still shows the
       // same screen; the code simply will not arrive.
@@ -311,7 +310,7 @@ function SubjectVerifyForm({ contact }: { contact: string }) {
     setBusy(true);
     setError(null);
     try {
-      await apiPost("/auth/otp/verify", { contact, code });
+      await verifyOtp({ contact, code });
       await refresh();
       router.replace("/my-consents");
     } catch (err) {

@@ -4,7 +4,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "@/lib/api";
+
+import { listNotifications } from "@/features/notifications/api";
 import type { ApiError } from "@/lib/errors";
 import { keys } from "@/lib/query";
 import type { AuditEntry } from "@/types";
@@ -20,6 +21,6 @@ import type { AuditEntry } from "@/types";
 export function useNotifications(limit = 50) {
   return useQuery<{ items: AuditEntry[]; total: number }, ApiError>({
     queryKey: keys.notifications.all,
-    queryFn: () => apiGet(`/notifications?limit=${limit}`),
+    queryFn: () => listNotifications(limit),
   });
 }

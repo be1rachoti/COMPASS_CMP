@@ -38,7 +38,14 @@ import {
   Select,
   Skeleton,
 } from "@/components/ui/primitives";
-import { apiGet, apiPost } from "@/lib/api";
+import {
+  getLink,
+  recordConsent,
+  register,
+  requestOtp,
+  serveNotice,
+  verifyOtp,
+} from "@/features/public-consent";
 import { ApiError } from "@/lib/errors";
 import type { LanguageCode, LinkView, Purpose, ServedNotice } from "@/types";
 import { formatDuration, humanise, shortHash } from "@/lib/format";
@@ -71,7 +78,7 @@ export default function ConsentPage() {
 
   React.useEffect(() => {
     let cancelled = false;
-    apiGet<LinkView>(`/c/${token}`)
+    getLink(token)
       .then((data) => {
         if (cancelled) return;
         setLink(data);
@@ -154,9 +161,7 @@ export default function ConsentPage() {
           onDone={async () => {
             setError(null);
             try {
-              const served = await apiGet<ServedNotice>(
-                `/c/${token}/notice?language_code=${language}`,
-              );
+              const served = await serveNotice(token, language);
               setNotice(served);
               setStep("notice");
             } catch (err) {
@@ -180,9 +185,7 @@ export default function ConsentPage() {
             try {
               // Re-serving stamps a fresh `served_at`: she is now reading a
               // different rendition, and the evidence must record which one.
-              const served = await apiGet<ServedNotice>(
-                `/c/${token}/notice?language_code=${next}`,
-              );
+              const served = await serveNotice(token, next);
               setNotice(served);
             } catch {
               setError("Could not switch language.");
@@ -278,13 +281,13 @@ function RegisterStep({
     setBusy(true);
     onError(null);
     try {
-      await apiPost(`/c/${token}/register`, {
+      await register(token, {
         full_name: form.full_name,
         email: form.email,
         mobile: form.mobile || undefined,
         person_type: "external",
       });
-      await apiPost(`/c/${token}/otp`, { contact: form.email });
+      await requestOtp(token, form.email);
       onDone(form.email);
     } catch (err) {
       onError(err instanceof ApiError ? err.userMessage() : "Could not register.");
@@ -367,7 +370,7 @@ function VerifyStep({
     setBusy(true);
     onError(null);
     try {
-      await apiPost(`/c/${token}/otp/verify`, { contact, code });
+      await verifyOtp(token, { contact, code });
       await onDone();
     } catch (err) {
       onError(err instanceof ApiError ? err.userMessage() : "Verification failed.");
@@ -454,7 +457,7 @@ function NoticeStep({
         : Object.fromEntries(purposes.map((p) => [p.purpose_uuid, grants[p.purpose_uuid] ?? false]));
 
     try {
-      const result = await apiPost<{ consent_uuid: string }>(`/c/${token}/consent`, {
+      const result = await recordConsent(token, {
         language_code: notice.language_code,
         served_at: notice.served_at, // echoed untouched - evidences s.5(1)
         grants: payload,

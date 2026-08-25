@@ -4,15 +4,16 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+import { setPersonType, updateMe } from "@/features/account/api";
 import type { Result } from "@/lib/query";
-import { apiPatch, apiPost } from "@/lib/api";
 import { keys } from "@/lib/query";
 import type { Acknowledged } from "@/types";
 
 export function useUpdateMe(): Result<unknown, { full_name?: string; mobile?: string }> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPatch("/me", body),
+    mutationFn: updateMe,
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.auth.me }),
   });
 }
@@ -23,7 +24,7 @@ export function useSetPersonType(): Result<
 > {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Acknowledged>("/me/person-type", body),
+    mutationFn: setPersonType,
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.auth.me }),
   });
 }

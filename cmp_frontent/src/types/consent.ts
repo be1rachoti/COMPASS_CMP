@@ -155,3 +155,71 @@ export interface ConsentAsset {
   project_uuid: Uuid;
   project_name: string;
 }
+
+/**
+ * The notice as it was served, for the person it was served to.
+ *
+ * Read from the copy taken at capture, not from the live notice. Joining live
+ * would let a later correction silently repoint somebody's record at words they
+ * never saw, which would make the record evidence of the wrong thing.
+ *
+ * `hash_matches` is the check that says whether that copy is still intact, and
+ * `integrity` is the server's own wording for it — carried rather than
+ * re-phrased here, so a data principal and an auditor read the same sentence.
+ */
+export interface MyConsentNotice {
+  consent_uuid: Uuid;
+  notice_uuid: Uuid;
+  notice_code: string;
+  version: number;
+  language_code: LanguageCode;
+  rendered_text: string;
+  served_at: Timestamp;
+  notice_content_hash: string;
+  content_hash: string;
+  hash_matches: boolean;
+  integrity: string;
+  withdraw_url: string;
+  exercise_rights_url: string;
+  board_complaint_url: string;
+  dpo_contact: string;
+  recipients_text: string | null;
+}
+
+/**
+ * One disclosure of this person's data.
+ *
+ * s.11(1)(b): a data principal may ask who their data has been shared with.
+ * Answered from the export record rather than from an archive, so the answer is
+ * derived from what actually left the system.
+ */
+export interface Disclosure {
+  export_uuid: Uuid;
+  export_type: string;
+  exported_at: Timestamp;
+  project_uuid: Uuid;
+  project_name: string;
+  site_uuid: Uuid;
+  site_label: string;
+  /** Null where the site has no processor — collected directly. */
+  processor_name: string | null;
+}
+
+/**
+ * One step in a consent's own history.
+ *
+ * A withdrawal supersedes rather than replaces, so this reads as a chain:
+ * `supersedes_consent_uuid` points at the artefact this one replaced, and the
+ * earliest link has none.
+ */
+export interface ConsentHistoryEntry {
+  consent_uuid: Uuid;
+  supersedes_consent_uuid: Uuid | null;
+  language_code: LanguageCode;
+  served_at: Timestamp;
+  affirmative_action_at: Timestamp;
+  action_type: string;
+  is_withdrawal: boolean;
+  granted_count: number;
+  purpose_count: number;
+}

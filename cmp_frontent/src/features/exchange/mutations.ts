@@ -1,77 +1,70 @@
 /**
  * Creating exports and submitting import manifests.
+ *
+ * Both write to append-only tables, which is why nothing here retries: a
+ * retried export would produce a second set of `export_line` rows and corrupt
+ * the disclosure record that answers "who was my data shared with".
  */
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPost, http } from "@/lib/api";
-import type { ApiError } from "@/lib/errors";
-import { keys, type Result } from "@/lib/query";
-import type { ExportRecord, ImportValidation, Uuid } from "@/types";
 
-export function useGenerateExport(projectUuid: Uuid) {
-  const qc = useQueryClient();
-  return useMutation<ExportRecord, ApiError, { type: string; site: Uuid }>({
-    mutationFn: (body) => apiPost<ExportRecord>(`/projects/${projectUuid}/exports`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.exchange.exports(projectUuid) }),
-  });
-}
+import {
+  createExport,
+  submitImport,
+  validateImport,
+  type ExportCreated,
+  type ExportInput,
+  type ImportSubmitted,
+  type ManifestUpload,
+} from "@/features/exchange/api";
+import { keys, prefixes, type Result } from "@/lib/query";
+import type { Uuid } from "@/types";
 
-export function useCreateExport(
-  projectUuid: Uuid,
-): Result<{ export_uuid: Uuid; row_count: number }, { type: string; site: string }> {
+/**
+ * Generate an export for one project.
+ *
+ * Invalidates the cross-project export list as well as the project's own: a new
+ * export is a new disclosure, and the console-wide list is the one a DPO
+ * watches.
+ */
+export function useCreateExport(projectUuid: Uuid): Result<ExportCreated, ExportInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost(`/projects/${projectUuid}/exports`, body),
+    mutationFn: (body: ExportInput) => createExport(projectUuid, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["all", "exports"] });
-      void qc.invalidateQueries({ queryKey: ["project", projectUuid] });
+      void qc.invalidateQueries({ queryKey: keys.exchange.exports(projectUuid) });
+      void qc.invalidateQueries({ queryKey: keys.exchange.allExports() });
+      void qc.invalidateQueries({ queryKey: keys.project.detail(projectUuid) });
     },
   });
-}
-
-export interface ManifestUpload {
-  source: string;
-  project?: string;
-  manifest: File;
 }
 
 /**
  * Dry run. Same parsing, same checks, nothing written.
  *
- * A manifest arriving from a third-party tool is the input you trust least, and
- * finding out after a partial write is worse than finding out before.
+ * No invalidation, because nothing changed — that is the whole point of the
+ * endpoint. A manifest from a third-party capture tool is the input this system
+ * trusts least, and finding out after a partial write is worse than finding out
+ * before.
  */
-export function useValidateImport(): Result<ImportValidation, ManifestUpload> {
-  return useMutation({
-    mutationFn: async (input) => {
-      const body = new FormData();
-      body.append("source", input.source);
-      if (input.project) body.append("project", input.project);
-      body.append("manifest", input.manifest);
-      const { data } = await http.post<ImportValidation>("/imports/validate", body);
-      return data;
-    },
-  });
-}
-
-export function useSubmitImport(): Result<
-  { batch_uuid: Uuid; status: string; accepted_rows: number; rejected_rows: number },
+export function useValidateImport(): Result<
+  Awaited<ReturnType<typeof validateImport>>,
   ManifestUpload
 > {
+  return useMutation({ mutationFn: validateImport });
+}
+
+export function useSubmitImport(): Result<ImportSubmitted, ManifestUpload> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input) => {
-      const body = new FormData();
-      body.append("source", input.source);
-      if (input.project) body.append("project", input.project);
-      body.append("manifest", input.manifest);
-      const { data } = await http.post("/imports", body);
-      return data;
-    },
+    mutationFn: submitImport,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.exchange.imports() });
       void qc.invalidateQueries({ queryKey: keys.exchange.allCollections() });
+      // A collection belongs to a project, and which one is in the manifest
+      // rather than in hand here.
+      void qc.invalidateQueries({ queryKey: prefixes.anyProject });
     },
   });
 }

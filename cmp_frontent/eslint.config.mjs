@@ -21,7 +21,7 @@ const config = [
       "playwright-report/**",
       "test-results/**",
       "next-env.d.ts",
-      "src/lib/api-schema.d.ts", // generated from the OpenAPI document
+      "src/types/api-schema.d.ts", // generated from the OpenAPI document
     ],
   },
 
@@ -60,9 +60,79 @@ const config = [
     },
   },
 
+  /**
+   * The dependency rule, enforced rather than remembered.
+   *
+   * Layers may only call the layer below:
+   *
+   *     app / components  ->  features  ->  lib  ->  the network
+   *
+   * A page that imports `@/lib/api` skips two of those. It works, which is
+   * exactly the problem: it works until somebody needs to change how requests
+   * are made and finds the change is in forty files rather than one. The same
+   * goes for a component importing `axios` directly, which would bypass the
+   * request id, the credential mode, the CSRF header and the error
+   * normalisation all at once.
+   *
+   * Documented rules get forgotten during a deadline. A lint error does not.
+   */
+  {
+    files: ["src/app/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@/lib/api",
+              message:
+                "Pages and components reach the network through a feature: import from @/features/<domain>, which owns the endpoint. See features/projects/api.ts.",
+            },
+            {
+              name: "@/lib/api/client",
+              message: "Same as @/lib/api - go through the feature that owns the endpoint.",
+            },
+            {
+              name: "axios",
+              message:
+                "Use the shared client in @/lib/api, which attaches the request id, credentials, the CSRF header, and normalises errors into ApiError.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  /**
+   * The other direction: nothing in `lib` may depend on a feature or a
+   * component. `lib` is the bottom of the stack, and an import pointing upward
+   * from it is a cycle waiting to be discovered at build time.
+   */
+  {
+    files: ["src/lib/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/features/*", "@/components/*", "@/app/*"],
+              message:
+                "lib is the bottom layer: it may not import from features, components or app. Move the shared piece down into lib, or the dependent piece up.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   {
     files: ["**/*.test.{ts,tsx}", "e2e/**/*.ts"],
-    rules: { "@typescript-eslint/no-explicit-any": "off" },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      // A test may reach for whatever it needs to construct the situation.
+      "no-restricted-imports": "off",
+    },
   },
 
   // Last: switches off the stylistic rules Prettier already owns, so the two

@@ -52,10 +52,10 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { ProjectProgress, StatusBadge } from "@/components/ui/status";
-import { apiDownload } from "@/lib/api";
 import { useLinks } from "@/features/consent";
 import { useNotices } from "@/features/notices";
 import {
+  downloadApprovalProof,
   useApprovals,
   useProject,
   useProjectHistory,
@@ -546,7 +546,7 @@ function ApprovalsCard({
   async function download(uuid: string, reference: string, recorded: string) {
     setBusy(uuid);
     try {
-      const file = await apiDownload(`/approvals/${uuid}/proof`);
+      const file = await downloadApprovalProof(uuid);
       saveBlob(file.blob, file.filename || `approval-${reference}`);
 
       if (file.contentHash && recorded && file.contentHash !== recorded) {

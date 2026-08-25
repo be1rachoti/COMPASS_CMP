@@ -26,7 +26,7 @@ import {
   Skeleton,
 } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { apiDelete, apiPost } from "@/lib/api";
+import { changePassword, revokeSession } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
 import { useSessions } from "@/features/account";
 import { formatDateTime, formatRelative } from "@/lib/format";
@@ -130,7 +130,7 @@ function SessionRow({
   async function revoke() {
     setBusy(true);
     try {
-      await apiDelete(`/auth/sessions/${session.uuid}`);
+      await revokeSession(session.uuid);
       toast.success("Session ended");
       onRevoked();
     } catch (err) {
@@ -184,10 +184,7 @@ function PasswordCard() {
     setBusy(true);
     setError(null);
     try {
-      await apiPost("/auth/password/change", {
-        current_password: current,
-        new_password: next,
-      });
+      await changePassword({ current_password: current, new_password: next });
       toast.success(
         "Password changed",
         "Every other session has been signed out.",

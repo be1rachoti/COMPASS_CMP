@@ -4,64 +4,64 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiPost, apiPut } from "@/lib/api";
+
+import {
+
+  activatePurpose,
+  createProcessor,
+  createPurpose,
+  createSource,
+  retirePurpose,
+  suspendProcessor,
+  suspendSource,
+  type ProcessorInput,
+  type PurposeInput,
+  type SourceInput,
+  updateProcessor,
+  updatePurpose,
+  updateSource,
+} from "@/features/registry/api";
 import type { ApiError } from "@/lib/errors";
 import type { Result } from "@/lib/query";
-import type { Processor, Purpose, Uuid } from "@/types";
+import type { Acknowledged, Processor, Purpose, Uuid } from "@/types";
+
 
 export function useActivatePurpose() {
   const qc = useQueryClient();
-  return useMutation<{ ok: boolean; message?: string }, ApiError, Uuid>({
-    mutationFn: (uuid) => apiPost(`/purposes/${uuid}/activate`),
+  return useMutation<Acknowledged, ApiError, Uuid>({
+    mutationFn: activatePurpose,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["purposes"] }),
   });
 }
 
 export function useRetirePurpose() {
   const qc = useQueryClient();
-  return useMutation<{ ok: boolean; message?: string }, ApiError, Uuid>({
-    mutationFn: (uuid) => apiPost(`/purposes/${uuid}/retire`),
+  return useMutation<Acknowledged, ApiError, Uuid>({
+    mutationFn: retirePurpose,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["purposes"] }),
   });
 }
 
 export function useSuspendProcessor() {
   const qc = useQueryClient();
-  return useMutation<{ ok: boolean; message?: string }, ApiError, Uuid>({
-    mutationFn: (uuid) => apiPost(`/processors/${uuid}/suspend`),
+  return useMutation<Acknowledged, ApiError, Uuid>({
+    mutationFn: suspendProcessor,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["processors"] }),
   });
 }
 
 export function useSuspendSource() {
   const qc = useQueryClient();
-  return useMutation<{ ok: boolean; message?: string }, ApiError, Uuid>({
-    mutationFn: (uuid) => apiPost(`/sources/${uuid}/suspend`),
+  return useMutation<Acknowledged, ApiError, Uuid>({
+    mutationFn: suspendSource,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
   });
-}
-
-export interface PurposeInput {
-  purpose_code: string;
-  name: string;
-  description: string;
-  uses: string;
-  lawful_basis: string;
-  s7_clause?: string | null;
-  data_categories: string[];
-  retention_days: number;
-  retention_basis: string;
-  erasure_trigger: string;
-  consent_validity_days?: number | null;
-  cross_border_permitted: boolean;
-  permitted_for_minors: boolean;
-  lapse_behaviour: string;
 }
 
 export function useCreatePurpose(): Result<Purpose, PurposeInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Purpose>("/purposes", body),
+    mutationFn: createPurpose,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["purposes"] }),
   });
 }
@@ -69,7 +69,7 @@ export function useCreatePurpose(): Result<Purpose, PurposeInput> {
 export function useUpdatePurpose(uuid: Uuid): Result<Purpose, Partial<PurposeInput>> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPut<Purpose>(`/purposes/${uuid}`, body),
+    mutationFn: (body: Partial<PurposeInput>) => updatePurpose(uuid, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["purposes"] });
       void qc.invalidateQueries({ queryKey: ["purpose", uuid] });
@@ -77,17 +77,10 @@ export function useUpdatePurpose(uuid: Uuid): Result<Purpose, Partial<PurposeInp
   });
 }
 
-export interface ProcessorInput {
-  legal_name: string;
-  type: string;
-  contract_ref: string;
-  security_confirmed_at: string;
-}
-
 export function useCreateProcessor(): Result<Processor, ProcessorInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost<Processor>("/processors", body),
+    mutationFn: createProcessor,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["processors"] }),
   });
 }
@@ -95,26 +88,15 @@ export function useCreateProcessor(): Result<Processor, ProcessorInput> {
 export function useUpdateProcessor(uuid: Uuid): Result<Processor, Partial<ProcessorInput>> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPut<Processor>(`/processors/${uuid}`, body),
+    mutationFn: (body: Partial<ProcessorInput>) => updateProcessor(uuid, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["processors"] }),
   });
-}
-
-export interface SourceInput {
-  source_code: string;
-  name: string;
-  source_role: string;
-  exchange_mode: string;
-  id_scheme?: string | null;
-  processor_uuid?: string | null;
-  site_uuid?: string | null;
-  is_authoritative_for: string[];
 }
 
 export function useCreateSource(): Result<unknown, SourceInput> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPost("/sources", body),
+    mutationFn: createSource,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
   });
 }
@@ -122,7 +104,7 @@ export function useCreateSource(): Result<unknown, SourceInput> {
 export function useUpdateSource(uuid: Uuid): Result<unknown, Partial<SourceInput>> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body) => apiPut(`/sources/${uuid}`, body),
+    mutationFn: (body: Partial<SourceInput>) => updateSource(uuid, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }),
   });
 }

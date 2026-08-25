@@ -4,7 +4,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { apiGet } from "@/lib/api";
+
+import {
+  getMyConsentNotice,
+  listMyConsentGrants,
+  listMyConsentHistory,
+  listMyConsents,
+  listMyDisclosures,
+} from "@/features/my-consents/api";
 import type { ApiError } from "@/lib/errors";
 import { keys } from "@/lib/query";
 import type { MyConsent, PurposeGrant, Uuid } from "@/types";
@@ -12,14 +19,14 @@ import type { MyConsent, PurposeGrant, Uuid } from "@/types";
 export function useMyConsents() {
   return useQuery<MyConsent[], ApiError>({
     queryKey: keys.me.consents,
-    queryFn: () => apiGet<MyConsent[]>("/me/consents"),
+    queryFn: () => listMyConsents(),
   });
 }
 
 export function useMyConsentGrants(uuid: Uuid | undefined) {
   return useQuery<PurposeGrant[], ApiError>({
     queryKey: keys.me.consentGrants(uuid ?? ""),
-    queryFn: () => apiGet<PurposeGrant[]>(`/me/consents/${uuid}/grants`),
+    queryFn: () => listMyConsentGrants(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -27,7 +34,7 @@ export function useMyConsentGrants(uuid: Uuid | undefined) {
 export function useMyConsentHistory(uuid: Uuid | undefined) {
   return useQuery({
     queryKey: keys.me.consentHistory(uuid ?? ""),
-    queryFn: () => apiGet(`/me/consents/${uuid}/history`),
+    queryFn: () => listMyConsentHistory(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -36,7 +43,7 @@ export function useMyConsentHistory(uuid: Uuid | undefined) {
 export function useMyConsentNotice(uuid: Uuid | undefined) {
   return useQuery({
     queryKey: keys.me.consentNotice(uuid ?? ""),
-    queryFn: () => apiGet(`/me/consents/${uuid}/notice`),
+    queryFn: () => getMyConsentNotice(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -44,6 +51,6 @@ export function useMyConsentNotice(uuid: Uuid | undefined) {
 export function useMyDisclosures() {
   return useQuery({
     queryKey: keys.me.disclosures,
-    queryFn: () => apiGet("/me/disclosures"),
+    queryFn: () => listMyDisclosures(),
   });
 }

@@ -4,7 +4,19 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { apiGet, queryString } from "@/lib/api";
+
+import {
+  getCollection,
+  getCollectionExceptions,
+  getImportBatch,
+  getImportErrors,
+  listCollectionAssets,
+  listCollections,
+  listExports,
+  listImports,
+  listProjectCollections,
+  listProjectExports,
+} from "@/features/exchange/api";
 import type { ApiError } from "@/lib/errors";
 import { keys, type ListFilters } from "@/lib/query";
 import type {
@@ -25,7 +37,7 @@ import type {
 export function useExports(projectUuid: Uuid | undefined) {
   return useQuery<ExportRecord[], ApiError>({
     queryKey: keys.exchange.exports(projectUuid ?? ""),
-    queryFn: () => apiGet<ExportRecord[]>(`/projects/${projectUuid}/exports`),
+    queryFn: () => listProjectExports(projectUuid!),
     enabled: Boolean(projectUuid),
   });
 }
@@ -33,14 +45,14 @@ export function useExports(projectUuid: Uuid | undefined) {
 export function useImports(filters: Record<string, unknown> = {}) {
   return useQuery<Page<ImportBatch>, ApiError>({
     queryKey: keys.exchange.imports(filters),
-    queryFn: () => apiGet<Page<ImportBatch>>(`/imports${queryString(filters)}`),
+    queryFn: () => listImports(filters),
   });
 }
 
 export function useCollections(projectUuid: Uuid | undefined) {
   return useQuery<Page<Collection>, ApiError>({
     queryKey: keys.exchange.collections(projectUuid ?? ""),
-    queryFn: () => apiGet<Page<Collection>>(`/projects/${projectUuid}/collections`),
+    queryFn: () => listProjectCollections(projectUuid!),
     enabled: Boolean(projectUuid),
   });
 }
@@ -48,7 +60,7 @@ export function useCollections(projectUuid: Uuid | undefined) {
 export function useCollectionExceptions(uuid: Uuid | undefined) {
   return useQuery<CollectionExceptions, ApiError>({
     queryKey: keys.exchange.collectionExceptions(uuid ?? ""),
-    queryFn: () => apiGet<CollectionExceptions>(`/collections/${uuid}/exceptions`),
+    queryFn: () => getCollectionExceptions(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -56,7 +68,7 @@ export function useCollectionExceptions(uuid: Uuid | undefined) {
 export function useCollection(uuid: Uuid | undefined) {
   return useQuery<CollectionDetail, ApiError>({
     queryKey: keys.exchange.collection(uuid ?? ""),
-    queryFn: () => apiGet<CollectionDetail>(`/collections/${uuid}`),
+    queryFn: () => getCollection(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -64,7 +76,7 @@ export function useCollection(uuid: Uuid | undefined) {
 export function useCollectionAssets(uuid: Uuid | undefined) {
   return useQuery<CollectionAsset[], ApiError>({
     queryKey: keys.exchange.collectionAssets(uuid ?? ""),
-    queryFn: () => apiGet<CollectionAsset[]>(`/collections/${uuid}/assets`),
+    queryFn: () => listCollectionAssets(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -72,7 +84,7 @@ export function useCollectionAssets(uuid: Uuid | undefined) {
 export function useImportBatch(uuid: Uuid | undefined) {
   return useQuery<ImportBatchDetail, ApiError>({
     queryKey: keys.exchange.importBatch(uuid ?? ""),
-    queryFn: () => apiGet<ImportBatchDetail>(`/imports/${uuid}`),
+    queryFn: () => getImportBatch(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -80,7 +92,7 @@ export function useImportBatch(uuid: Uuid | undefined) {
 export function useImportErrors(uuid: Uuid | undefined) {
   return useQuery<ImportErrorReport, ApiError>({
     queryKey: keys.exchange.importErrors(uuid ?? ""),
-    queryFn: () => apiGet<ImportErrorReport>(`/imports/${uuid}/errors`),
+    queryFn: () => getImportErrors(uuid!),
     enabled: Boolean(uuid),
   });
 }
@@ -88,13 +100,13 @@ export function useImportErrors(uuid: Uuid | undefined) {
 export function useAllExports(filters: ListFilters = {}) {
   return useQuery<Page<ExportListRow>, ApiError>({
     queryKey: keys.exchange.allExports(filters),
-    queryFn: () => apiGet<Page<ExportListRow>>(`/exports${queryString(filters)}`),
+    queryFn: () => listExports(filters),
   });
 }
 
 export function useAllCollections(filters: ListFilters = {}) {
   return useQuery<Page<CollectionListRow>, ApiError>({
     queryKey: keys.exchange.allCollections(filters),
-    queryFn: () => apiGet<Page<CollectionListRow>>(`/collections${queryString(filters)}`),
+    queryFn: () => listCollections(filters),
   });
 }

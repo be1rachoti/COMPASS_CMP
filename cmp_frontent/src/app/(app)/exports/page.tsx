@@ -27,8 +27,7 @@ import {
 } from "@/components/data-display/resource-list";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Badge, Button, Mono, Td, Tr } from "@/components/ui/primitives";
-import { apiDownload } from "@/lib/api";
-import { useAllExports } from "@/features/exchange";
+import { downloadExport, useAllExports } from "@/features/exchange";
 import type { ExportListRow } from "@/types";
 import { formatDateTime, saveBlob, shortHash } from "@/lib/format";
 import { useToast } from "@/providers";
@@ -53,7 +52,7 @@ export default function ExportsPage() {
   async function download(uuid: string) {
     setBusy(uuid);
     try {
-      const file = await apiDownload(`/exports/${uuid}/download`);
+      const file = await downloadExport(uuid);
       saveBlob(file.blob, file.filename);
 
       // The staleness header is not decoration: a consented list is true at the

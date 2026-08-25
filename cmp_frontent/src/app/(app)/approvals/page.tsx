@@ -20,8 +20,7 @@ import { ResourceList, useCursorStack } from "@/components/data-display/resource
 import { EmptyQueue } from "@/components/ui/graphics";
 import { Badge, Button, Mono, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
-import { apiDownload } from "@/lib/api";
-import { useAllApprovals } from "@/features/projects";
+import { downloadApprovalProof, useAllApprovals } from "@/features/projects";
 import type { ApprovalListRow } from "@/types";
 import { formatDate, formatDateTime, humanise, saveBlob, shortHash } from "@/lib/format";
 import { useToast } from "@/providers";
@@ -36,7 +35,7 @@ export default function ApprovalsPage() {
   async function downloadProof(uuid: string, reference: string, recorded: string) {
     setBusy(uuid);
     try {
-      const file = await apiDownload(`/approvals/${uuid}/proof`);
+      const file = await downloadApprovalProof(uuid);
       saveBlob(file.blob, file.filename || `approval-${reference}`);
 
       // The served hash is compared against the one recorded at upload. A
