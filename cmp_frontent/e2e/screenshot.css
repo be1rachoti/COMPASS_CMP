@@ -1,0 +1,35 @@
+/*
+ * Injected before every screenshot comparison.
+ *
+ * Everything here removes a source of difference that is real on screen and
+ * meaningless in a diff. A visual test that fails because a spinner was caught
+ * mid-rotation trains people to re-run it until it passes, at which point it
+ * has stopped testing anything.
+ */
+
+/* Motion. Playwright's `animations: "disabled"` handles CSS animations and
+   transitions, but not the ones a component drives with requestAnimationFrame,
+   and not the shimmer on a skeleton. */
+*,
+*::before,
+*::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+/* The caret blinks. On a page with a focused input that is a 50% chance of a
+   one-pixel-wide diff on every run. */
+* {
+  caret-color: transparent !important;
+}
+
+/* Anything explicitly marked as varying between runs — a relative timestamp, a
+   request id, a countdown. Mark these in the component with
+   `data-visual-unstable`, rather than trying to guess here. */
+[data-visual-unstable] {
+  visibility: hidden !important;
+}

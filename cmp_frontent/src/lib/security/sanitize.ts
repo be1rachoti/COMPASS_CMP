@@ -105,6 +105,10 @@ export function safeMailto(email: string | null | undefined): string | null {
 export function safeFilename(value: string | null | undefined, fallback = "download"): string {
   if (!value) return fallback;
   const cleaned = strip(value.replace(/[/\\]/g, "-"), isUnsafeInFilename)
+    // A run of dots is never part of a real filename, and it is how a traversal
+    // sequence survives having its separators taken out. One dot separates a
+    // name from its extension; more than one is somebody trying something.
+    .replace(/\.{2,}/g, ".")
     // A leading dot hides the file on POSIX; a trailing dot is dropped by
     // Windows, which is how `report.txt.` quietly becomes `report.txt`.
     .replace(/^\.+/, "")
@@ -126,4 +130,36 @@ export function truncate(value: string, max: number): string {
   const chars = Array.from(value);
   if (chars.length <= max) return value;
   return chars.slice(0, Math.max(0, max - 1)).join("") + "…";
+}
+
+/**
+ * A path safe to navigate to after signing in.
+ *
+ * The `?next=` parameter on the sign-in page is attacker-controlled — it is
+ * whatever was in the URL somebody clicked. Handing it to `router.replace`
+ * unchecked is an open redirect: `/sign-in?next=https://evil.example` produces
+ * a link that starts on this origin, shows this organisation's sign-in page,
+ * and lands the user somewhere else with their trust already established. That
+ * is the whole mechanism of a credential-phishing link.
+ *
+ * So only a same-origin path is returned, and everything else becomes the
+ * fallback. Note that `safeHref` is not sufficient here: it permits absolute
+ * http(s) URLs, which are fine in an `href` and are exactly what must not
+ * happen after authentication.
+ */
+export function safeRedirectPath(value: string | null | undefined, fallback = "/"): string {
+  if (!value) return fallback;
+
+  const cleaned = strip(value.trim(), (c) => isInvisible(c.codePointAt(0) ?? 0));
+
+  // Must be a path, not a URL. `//host` is protocol-relative; `/\host` is the
+  // same thing to browsers that normalise backslashes, which most do.
+  if (!cleaned.startsWith("/")) return fallback;
+  if (cleaned.startsWith("//") || cleaned.startsWith("/\\")) return fallback;
+
+  // A scheme cannot appear in a path, so anything that parses as an absolute
+  // URL is not one.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(cleaned)) return fallback;
+
+  return cleaned;
 }

@@ -3,12 +3,36 @@
  *
  * These drive a real browser against a real API, which is the only way to test
  * the things that only exist in a browser: the HttpOnly session cookie, the
- * double-submit CSRF header, and the consent flow's multi-step state.
+ * double-submit CSRF header, the Content Security Policy, and the consent
+ * flow's multi-step state.
  */
 import { defineConfig, devices } from "@playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
+
+/**
+ * `127.0.0.1` by default — the loopback address, which no browser treats
+ * specially.
+ */
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${PORT}`;
+
+/**
+ * The same server, reached by name instead of by address.
+ *
+ * This exists because of a specific bug that shipped once and cost a day. The
+ * API is on `127.0.0.1:8000`; the console is opened at `localhost:3000`.
+ * Browsers treat those as **different sites** for cookie purposes, so a session
+ * cookie set `SameSite=Lax` is silently dropped on the next XHR — login returns
+ * 200 and the following request is a 401, with nothing in either log to say
+ * why.
+ *
+ * The `/api` rewrite in `next.config.ts` is what fixes it, by making the API
+ * same-origin. Testing only on `127.0.0.1` would not have caught the original
+ * bug and would not catch its return, because on that host the two names agree.
+ * So the same specs run against `localhost` too, and if somebody removes the
+ * rewrite the auth spec fails here rather than in somebody's browser.
+ */
+const LOCALHOST_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -20,7 +44,20 @@ export default defineConfig({
   workers: process.env.CI ? 2 : undefined,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : [["list"]],
   timeout: 30_000,
-  expect: { timeout: 5_000 },
+  expect: {
+    timeout: 5_000,
+    toHaveScreenshot: {
+      // Anti-aliasing differs between machines and between runs on the same
+      // machine. A zero threshold produces a suite that fails for reasons
+      // nobody can act on, which is how visual tests get disabled.
+      maxDiffPixelRatio: 0.02,
+      // Motion is the other source of noise: a chart that animates in settles
+      // at a different frame each run. `stylePath` below stops it entirely.
+      animations: "disabled",
+      stylePath: "./e2e/screenshot.css",
+    },
+  },
+  snapshotPathTemplate: "{testDir}/__screenshots__/{projectName}/{arg}{ext}",
 
   use: {
     baseURL: BASE_URL,
@@ -31,9 +68,42 @@ export default defineConfig({
 
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+
     // The consent flow is used on phones at a collection site far more often
     // than on a desktop, so it is tested there too.
     { name: "mobile", use: { ...devices["Pixel 7"] } },
+
+    /**
+     * The host people actually type. Only the auth-sensitive specs run here —
+     * running everything twice would double the suite for one class of bug, and
+     * that class is entirely about cookies.
+     */
+    {
+      name: "localhost-cookies",
+      testMatch: /(auth|consent-flow)\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: LOCALHOST_URL },
+    },
+
+    /**
+     * Screenshots, kept apart from the behavioural specs.
+     *
+     * Pinned to one viewport and one device scale factor, because a snapshot
+     * taken at a different size is a diff of the layout rather than of the
+     * change under review.
+     */
+    {
+      name: "visual",
+      testMatch: /visual\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 1,
+        // Screenshots are compared against a committed baseline, and a
+        // baseline in one theme says nothing about the other. Both are
+        // captured; see the spec.
+        colorScheme: "light",
+      },
+    },
   ],
 
   webServer: process.env.E2E_BASE_URL

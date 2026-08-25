@@ -27,6 +27,7 @@ import { AuthLayout } from "@/components/layout/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
 import { apiPost } from "@/lib/api";
 import { ApiError } from "@/lib/errors";
+import { safeRedirectPath } from "@/lib/security";
 import type { LoginResponse } from "@/types";
 import { useAuth } from "@/providers";
 
@@ -163,7 +164,9 @@ function StaffForm() {
       }
 
       await refresh();
-      router.replace(params.get("next") || "/dashboard");
+      // `next` is attacker-controlled - it is whatever was in the link that
+      // sent them here. Anything not a same-origin path becomes the dashboard.
+      router.replace(safeRedirectPath(params.get("next"), "/dashboard"));
     } catch (error) {
       if (error instanceof ApiError) {
         // Field errors go on the field; everything else goes in the banner.
