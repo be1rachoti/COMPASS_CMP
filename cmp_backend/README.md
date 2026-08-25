@@ -233,15 +233,70 @@ delivery, which is why every task is idempotent and why imports upsert on
 
 ## Layout
 
+Nine packages under `src/cmp/`, layered so each may only call the layer below it.
+See [docs/architecture/layers.md](docs/architecture/layers.md) for what each may
+and may not do, and [dependency-rules.md](docs/architecture/dependency-rules.md)
+for the import graph.
+
 ```
 src/cmp/
-  core/        config, errors, logging, security, permissions, pagination, context
-  api/         routers, dependencies, middleware, error handlers
-  domain/      services — the only place that writes
-  db/          pool, SQL helpers, repositories
-  tasks/       Celery app, notifications, maintenance, dispatch policy
-  schemas/     request (strict) and response (filtering) models
-migrations/    raw-SQL Alembic revisions
-tests/         unit (pure) and integration (real datastores)
-docker/nginx/  TLS, rate limits, upload buffering, token scrubbing
+  main.py            ASGI entrypoint — a stable target for uvicorn/gunicorn
+  bootstrap/         assembly: factory, lifespan, middleware, routers, container
+  api/
+    routers/v1/      11 authenticated routers
+    routers/public/  the consent flow, and the notice/rights viewers
+    dependencies/    sessions, csrf, authentication, authorization, paging, filters
+    middleware/      request context, security headers, body limit, access log
+    errors/          one error contract: responses, handlers, status mapping
+  auth/
+    identity/        Principal — who is calling
+    authentication/  password, MFA, OTP, password reset
+    authorization/   roles, resources, scopes, evaluator, policy
+    sessions/        server-side sessions in Redis
+    rate_limit/      limits, lockout, distributed locks
+  domain/            one package per aggregate; the only layer that writes
+    projects/        service + state_machine
+    notices/  consent/  exchange/  audit/  registry/  users/  shared/
+  validation/        the constrained types every request model is built from
+  db/
+    pool.py sql.py redis.py
+    repositories/    one per table cluster, plus the audit entity resolver
+  infrastructure/    email, sms, storage, outbound HTTP — swappable adapters
+  core/              config, enums, constants, permissions, security, errors,
+                     pagination, logging, context, result — imports nothing local
+  tasks/             Celery: authentication, notifications, maintenance, exchange
+
+migrations/          raw-SQL Alembic revisions (0001-0004)
+tests/
+  unit/              pure functions; no I/O
+  integration/       real PostgreSQL and Redis
+  security/          BOLA, BFLA, mass assignment, CSRF, rate limits, auth
+  api/               reserved for the httpx.ASGITransport suite
+scripts/             seed, create_admin, reset_dev, healthcheck
+docs/                architecture, security, database, operations
+docker/              Dockerfile, compose, nginx (TLS, rate limits, token scrubbing)
 ```
+
+### Where to start reading
+
+| Question | File |
+|---|---|
+| How is the app assembled? | `bootstrap/application.py` |
+| What happens to a request? | [docs/architecture/request-lifecycle.md](docs/architecture/request-lifecycle.md) |
+| Who may do what? | `core/permissions.py`, then `auth/authorization/policy.py` |
+| How does a project move state? | `domain/projects/state_machine.py` |
+| What makes the audit trail evidence? | [docs/security/audit.md](docs/security/audit.md) |
+| Why no ORM? | [docs/architecture/overview.md](docs/architecture/overview.md) |
+
+## Operator scripts
+
+```bash
+uv run python scripts/seed.py            # development data; refuses in production
+uv run python scripts/create_admin.py    # the bootstrap account; refuses if one exists
+uv run python scripts/reset_dev.py       # drop and rebuild; local/test only
+uv run python scripts/healthcheck.py     # post-deploy checks; read-only, safe in prod
+```
+
+`healthcheck.py` answers what `/health` and `/ready` cannot: are the enforcement
+triggers present, does the audit chain verify, does every collection reconcile,
+and is production quietly writing mail to a file.
