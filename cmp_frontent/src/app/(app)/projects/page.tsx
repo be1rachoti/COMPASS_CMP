@@ -28,7 +28,7 @@ import {
   Th,
   Tr,
 } from "@/components/ui/primitives";
-import { ProjectForm } from "@/features/projects/components/forms";
+import { ProjectForm } from "@/features/projects/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status";
 import { useEnums } from "@/features/meta";

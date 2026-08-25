@@ -21,7 +21,7 @@ import {
   useCursorStack,
   useFilterParam,
 } from "@/components/data-display/resource-list";
-import { AgentForm } from "@/features/projects/components/forms";
+import { AgentForm } from "@/features/projects/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyLink } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";

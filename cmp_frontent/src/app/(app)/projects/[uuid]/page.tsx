@@ -34,9 +34,9 @@ import {
   ApprovalForm,
   ProjectForm,
   SiteForm,
-} from "@/features/projects/components/forms";
+} from "@/features/projects/components";
 import { ExportForm } from "@/features/exchange/components/forms";
-import { NoticeCopyForm, NoticeForm } from "@/features/notices/components/forms";
+import { NoticeCopyForm, NoticeForm } from "@/features/notices/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Alert,

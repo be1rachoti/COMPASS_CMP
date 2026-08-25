@@ -31,7 +31,7 @@ import {
   LanguageForm,
   NoticeForm,
   NoticePurposesForm,
-} from "@/features/notices/components/forms";
+} from "@/features/notices/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Alert,
