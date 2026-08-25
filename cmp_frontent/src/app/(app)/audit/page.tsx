@@ -18,7 +18,7 @@ import { CheckCircle2, ShieldAlert, ShieldCheck } from "lucide-react";
 import * as React from "react";
 
 import { PageHeader } from "@/components/app-shell";
-import { AuditDetailDialog, EntityRef, eventSentence } from "@/components/audit-detail";
+import { AuditDetailDialog, distinctSentence, EntityRef } from "@/components/audit-detail";
 import {
   FilterBar,
   FilterSelect,
@@ -151,7 +151,14 @@ export default function AuditPage() {
             </Td>
             <Td>
               <span className="font-medium">{humanise(e.event_type.replace(/\./g, " "))}</span>
-              <p className="mt-0.5 max-w-md text-xs text-text-subtle">{eventSentence(e)}</p>
+              {/* Only where it says something the title does not. For an event
+                  with no mapped sentence the fallback *is* the title, and
+                  printing it twice reads as a rendering bug. */}
+              {distinctSentence(e) && (
+                <p className="mt-0.5 max-w-md text-xs text-text-subtle">
+                  {distinctSentence(e)}
+                </p>
+              )}
             </Td>
             <Td>
               {/* Actor and subject are frequently different people: when a DCO

@@ -75,7 +75,7 @@ export function eventSentence(entry: AuditEntry): string {
  * heading twice reads as a rendering bug. In a listing the repetition is useful —
  * the row's own title is small — but under a dialog title it is noise.
  */
-function distinctSentence(entry: AuditEntry): string | null {
+export function distinctSentence(entry: AuditEntry): string | null {
   const sentence = eventSentence(entry);
   const title = humanise(entry.event_type.replace(/\./g, " "));
   return sentence === title ? null : sentence;
