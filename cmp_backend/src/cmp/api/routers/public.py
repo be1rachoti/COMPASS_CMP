@@ -19,7 +19,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request, Response, status
 from pydantic import EmailStr, Field
 
-from cmp.api.deps import set_session_cookies
+from cmp.api.dependencies import set_session_cookies
 from cmp.auth.rate_limit import service as ratelimit
 from cmp.auth.sessions import service as sessions
 from cmp.core.config import settings

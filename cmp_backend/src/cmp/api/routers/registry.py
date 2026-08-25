@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 from pydantic import Field, field_validator, model_validator
 
-from cmp.api.deps import (
+from cmp.api.dependencies import (
     CurrentUser,
     Paging,
     RequireDPO,

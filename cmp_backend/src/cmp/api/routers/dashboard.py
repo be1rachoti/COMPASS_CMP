@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from cmp.api.deps import CurrentUser
+from cmp.api.dependencies import CurrentUser
 from cmp.core.errors import Forbidden, NotFound
 from cmp.core.permissions import Role
 from cmp.db.pool import connection, transaction

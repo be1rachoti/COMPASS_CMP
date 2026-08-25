@@ -17,7 +17,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
 from pydantic import Field
 
-from cmp.api.deps import CurrentUser, Paging, RequireDPO, RequireResource, reject_unknown_filters
+from cmp.api.dependencies import (
+    CurrentUser,
+    Paging,
+    RequireDPO,
+    RequireResource,
+    reject_unknown_filters,
+)
 from cmp.core.config import settings
 from cmp.core.errors import BadRequest, Forbidden, NotFound, ValidationFailed
 from cmp.core.pagination import PageRequest

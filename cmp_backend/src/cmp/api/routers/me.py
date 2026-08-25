@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 from pydantic import Field
 
-from cmp.api.deps import CurrentUser, RequireDataSubject
+from cmp.api.dependencies import CurrentUser, RequireDataSubject
 from cmp.core.errors import Forbidden, NotFound, ValidationFailed
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import consent as consent_repo

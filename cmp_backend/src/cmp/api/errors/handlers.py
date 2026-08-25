@@ -1,68 +1,34 @@
-"""Exception handlers - one error contract for every route.
+"""Turning an exception into that body.
 
-    {"error": {"code", "message", "field", "request_id"}}
+Four handlers, ordered from most specific to least:
 
-Two rules that are easy to lose and expensive to lose:
+* `cmp_error_handler` — our own hierarchy. These carry their own status and
+  code, so the mapping is a lookup rather than a decision.
+* `validation_handler` — Pydantic and FastAPI. Rewritten into our shape, with
+  the offending field named, because "422 Unprocessable Entity" with a nested
+  loc/msg/type array is not something a UI can put next to an input box.
+* `http_exception_handler` — Starlette's own, raised by the framework before
+  our code runs.
+* `unhandled_handler` — the last resort. Logs the traceback and returns a
+  generic body: an unexpected exception message can carry a query fragment, a
+  file path or a row, and none of those belong in a response.
 
-* **Nothing internal escapes.** No stack trace, no file path, no SQL, no
-  constraint name, no library version. An unhandled exception becomes a generic
-  500 with a request id; the detail goes to the log, where it is correlated by
-  that id.
-* **403 is audited, 404 is the default.** A DCO requesting another DCO's project
-  gets 404 - a 403 would confirm the project exists. 403 is reserved for a
-  resource the user can see but may not act on.
+The request id is on every one of them. A failure a user cannot quote is a
+failure an operator cannot find.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-from fastapi import FastAPI, Request, status
+from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import ORJSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from cmp.core.context import current_context
+from cmp.api.errors.responses import response
 from cmp.core.errors import CmpError, RateLimited
 from cmp.core.logging import get_logger
 
 log = get_logger("cmp.api.errors")
-
-
-def error_body(
-    code: str,
-    message: str,
-    *,
-    field: str | None = None,
-    extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "code": code,
-        "message": message,
-        "request_id": current_context().request_id,
-    }
-    if field:
-        body["field"] = field
-    if extra:
-        body |= extra
-    return {"error": body}
-
-
-def _response(
-    status_code: int,
-    code: str,
-    message: str,
-    *,
-    field: str | None = None,
-    extra: dict[str, Any] | None = None,
-    headers: dict[str, str] | None = None,
-) -> ORJSONResponse:
-    return ORJSONResponse(
-        status_code=status_code,
-        content=error_body(code, message, field=field, extra=extra),
-        headers=headers,
-    )
-
 
 async def cmp_error_handler(request: Request, exc: Exception) -> ORJSONResponse:
     assert isinstance(exc, CmpError)
@@ -78,7 +44,7 @@ async def cmp_error_handler(request: Request, exc: Exception) -> ORJSONResponse:
         status=exc.status_code,
         error_code=exc.code,
     )
-    return _response(
+    return response(
         exc.status_code,
         exc.code,
         exc.message,
@@ -108,7 +74,7 @@ async def validation_handler(request: Request, exc: Exception) -> ORJSONResponse
         field=field,
         error_count=len(errors),
     )
-    return _response(
+    return response(
         status.HTTP_422_UNPROCESSABLE_ENTITY,
         "validation_failed",
         first.get("msg", "Validation failed"),
@@ -145,7 +111,7 @@ async def http_exception_handler(request: Request, exc: Exception) -> ORJSONResp
     }
     code = codes.get(exc.status_code, "error")
     detail = exc.detail if isinstance(exc.detail, str) else "Request failed"
-    return _response(
+    return response(
         exc.status_code,
         code,
         detail,
@@ -162,15 +128,8 @@ async def unhandled_handler(request: Request, exc: Exception) -> ORJSONResponse:
         exc_type=type(exc).__name__,
         exc_info=True,
     )
-    return _response(
+    return response(
         status.HTTP_500_INTERNAL_SERVER_ERROR,
         "internal_error",
         "An unexpected error occurred. Quote the request id if you report this.",
     )
-
-
-def install(app: FastAPI) -> None:
-    app.add_exception_handler(CmpError, cmp_error_handler)
-    app.add_exception_handler(RequestValidationError, validation_handler)
-    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-    app.add_exception_handler(Exception, unhandled_handler)

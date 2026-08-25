@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request, Response, status
 from pydantic import EmailStr, Field
 
-from cmp.api.deps import (
+from cmp.api.dependencies import (
     CurrentUser,
     PartialUser,
     clear_session_cookies,

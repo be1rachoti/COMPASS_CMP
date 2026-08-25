@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from cmp.api.deps import Paging, RequireResource, reject_unknown_filters
+from cmp.api.dependencies import Paging, RequireResource, reject_unknown_filters
 from cmp.core.errors import Conflict, NotFound
 from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
