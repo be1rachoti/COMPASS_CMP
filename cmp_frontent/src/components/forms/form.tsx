@@ -26,27 +26,39 @@ import {
   type Path,
   type UseFormReturn,
 } from "react-hook-form";
-import type { ZodType } from "zod";
+import type { ZodType, ZodTypeDef } from "zod";
 
 import { Alert } from "@/components/ui/primitives";
 import { ApiError } from "@/lib/errors";
 import { formatBytes } from "@/lib/format";
 
-export interface ApiFormResult<T extends FieldValues> extends UseFormReturn<T> {
+export interface ApiFormResult<TOut extends FieldValues, TIn extends FieldValues = TOut>
+  extends UseFormReturn<TIn, unknown, TOut> {
   /** Error that belongs to the form as a whole, not to one field. */
   formError: string | null;
   setFormError: (message: string | null) => void;
   /** Wraps a submit handler: maps ApiError onto fields, everything else to the banner. */
-  submit: (handler: (values: T) => Promise<void>) => (event?: React.BaseSyntheticEvent) => void;
+  submit: (
+    handler: (values: TOut) => Promise<void>,
+  ) => (event?: React.BaseSyntheticEvent) => void;
 }
 
-export function useApiForm<T extends FieldValues>(
-  schema: ZodType<T>,
-  defaults: DefaultValues<T>,
-): ApiFormResult<T> {
+/**
+ * `TIn` is separate from `T` on purpose.
+ *
+ * A schema's *input* is what the fields hold while somebody is typing — an
+ * empty text box is `""` — and its *output* is what the API receives, where
+ * that same field is `null`. The `optional()` primitive is exactly this
+ * transform. Collapsing the two would force every optional field to be typed as
+ * if a blank box were already `null`, which is only true after parsing.
+ */
+export function useApiForm<TOut extends FieldValues, TIn extends FieldValues>(
+  schema: ZodType<TOut, ZodTypeDef, TIn>,
+  defaults: DefaultValues<TIn>,
+): ApiFormResult<TOut, TIn> {
   const [formError, setFormError] = React.useState<string | null>(null);
 
-  const form = useForm<T>({
+  const form = useForm<TIn, unknown, TOut>({
     resolver: zodResolver(schema),
     defaultValues: defaults,
     // Validate on blur rather than on every keystroke: an error appearing under
@@ -55,7 +67,7 @@ export function useApiForm<T extends FieldValues>(
   });
 
   const submit = React.useCallback(
-    (handler: (values: T) => Promise<void>) =>
+    (handler: (values: TOut) => Promise<void>) =>
       form.handleSubmit(async (values) => {
         setFormError(null);
         try {
@@ -72,7 +84,7 @@ export function useApiForm<T extends FieldValues>(
             // Only set errors for fields this form actually has; a server field
             // we do not render must surface in the banner or it is invisible.
             if (name in form.getValues()) {
-              form.setError(name as Path<T>, { message });
+              form.setError(name as Path<TIn>, { message });
               matched += 1;
             }
           }

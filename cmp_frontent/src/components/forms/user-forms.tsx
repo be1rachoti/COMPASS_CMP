@@ -19,7 +19,6 @@
 "use client";
 
 import * as React from "react";
-import { z } from "zod";
 
 import { FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -28,20 +27,12 @@ import { useChangeRole, useCreateUser, useUpdateUser } from "@/features/users";
 import { useEnums } from "@/features/meta";
 import type { User } from "@/types";
 import { useToast } from "@/providers";
+import {
+  roleSchema,
+  userSchema,
+} from "@/features/users/schemas";
 
 /* ============================================================ create / edit */
-
-const userSchema = z.object({
-  full_name: z.string().min(1, "A name is required").max(200),
-  email: z.string().email("Not a valid email address"),
-  role: z.string().min(1, "Choose a role"),
-  username: z.string().max(120).optional().nullable(),
-  mobile: z.string().max(20).optional().nullable(),
-  organization_id: z.string().max(60).optional().nullable(),
-  person_type: z.string().optional().nullable(),
-});
-
-type UserValues = z.infer<typeof userSchema>;
 
 export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) {
   const toast = useToast();
@@ -49,7 +40,7 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
   const create = useCreateUser();
   const update = useUpdateUser(user?.uuid ?? "");
 
-  const form = useApiForm<UserValues>(userSchema, {
+  const form = useApiForm(userSchema, {
     full_name: user?.full_name ?? "",
     email: user?.email ?? "",
     role: user?.role ?? "dco",
@@ -181,19 +172,12 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
 
 /* ============================================================== role change */
 
-const roleSchema = z.object({
-  role: z.string().min(1, "Choose the new role"),
-  reason: z.string().max(500).optional().nullable(),
-});
-
-type RoleValues = z.infer<typeof roleSchema>;
-
 export function RoleChangeForm({ user, onDone }: { user: User; onDone: () => void }) {
   const toast = useToast();
   const { data: enums } = useEnums();
   const change = useChangeRole(user.uuid);
 
-  const form = useApiForm<RoleValues>(roleSchema, { role: user.role, reason: "" });
+  const form = useApiForm(roleSchema, { role: user.role, reason: "" });
   const next = form.watch("role");
 
   const onSubmit = form.submit(async (values) => {

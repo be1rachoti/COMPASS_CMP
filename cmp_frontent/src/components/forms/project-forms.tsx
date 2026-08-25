@@ -16,7 +16,6 @@
 
 import { AlertTriangle, Copy, Check } from "lucide-react";
 import * as React from "react";
-import { z } from "zod";
 
 import { FileInput, FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -34,18 +33,14 @@ import { useAssignableDcos } from "@/features/projects";
 import { useProcessors, useSources } from "@/features/registry";
 import type { Project } from "@/types";
 import { useToast } from "@/providers";
+import {
+  agentSchema,
+  approvalSchema,
+  projectSchema,
+  siteSchema,
+} from "@/features/projects/schemas";
 
 /* ================================================================== project */
-
-const projectSchema = z.object({
-  project_name: z.string().min(1, "A name is required").max(200),
-  description: z.string().min(1, "Describe what this project collects and why"),
-  dco_user_uuid: z.string().min(1, "Nominate a Data Collection Owner"),
-  internal_project_name: z.string().max(200).optional().nullable(),
-  requesting_team: z.string().max(120).optional().nullable(),
-});
-
-type ProjectValues = z.infer<typeof projectSchema>;
 
 export function ProjectForm({ project, onDone }: { project?: Project; onDone: () => void }) {
   const toast = useToast();
@@ -57,7 +52,7 @@ export function ProjectForm({ project, onDone }: { project?: Project; onDone: ()
   // requirement satisfiable without opening the register to them.
   const { data: dcos } = useAssignableDcos();
 
-  const form = useApiForm<ProjectValues>(projectSchema, {
+  const form = useApiForm(projectSchema, {
     project_name: project?.project_name ?? "",
     description: project?.description ?? "",
     dco_user_uuid: project?.dco_uuid ?? "",
@@ -173,15 +168,6 @@ export function ProjectForm({ project, onDone }: { project?: Project; onDone: ()
 
 /* ===================================================================== site */
 
-const siteSchema = z.object({
-  site_label: z.string().min(1, "A label is required").max(160),
-  location: z.string().max(200).optional().nullable(),
-  processor_uuid: z.string().optional().nullable(),
-  source_uuid: z.string().optional().nullable(),
-});
-
-type SiteValues = z.infer<typeof siteSchema>;
-
 export function SiteForm({
   projectUuid,
   noticePublished,
@@ -197,7 +183,7 @@ export function SiteForm({
   const create = useCreateSite(projectUuid);
   const { data: processors } = useProcessors({ status: "active", limit: 100 });
 
-  const form = useApiForm<SiteValues>(siteSchema, {
+  const form = useApiForm(siteSchema, {
     site_label: "",
     location: "",
     processor_uuid: "",
@@ -342,20 +328,12 @@ export function SiteForm({
 
 /* ========================================================== agent / link ==== */
 
-const agentSchema = z.object({
-  expires_at: z.string().min(1, "Decide when this link stops working"),
-  max_uses: z.coerce.number().int().min(1).max(100_000).optional().nullable(),
-  agent_ref: z.string().max(120).optional().nullable(),
-});
-
-type AgentValues = z.infer<typeof agentSchema>;
-
 export function AgentForm({ siteUuid, onDone }: { siteUuid: string; onDone: () => void }) {
   const toast = useToast();
   const assign = useAssignAgent(siteUuid);
   const [minted, setMinted] = React.useState<MintedLink | null>(null);
 
-  const form = useApiForm<AgentValues>(agentSchema, {
+  const form = useApiForm(agentSchema, {
     // Deliberately empty. The absence of a default expiry is the control.
     expires_at: "",
     max_uses: null,
@@ -469,14 +447,6 @@ function MintedLinkPanel({ link, onDone }: { link: MintedLink; onDone: () => voi
 
 /* ================================================================= approval */
 
-const approvalSchema = z.object({
-  approval_type: z.string().min(1, "Choose a type"),
-  reference_no: z.string().min(1, "A reference is required").max(120),
-  approved_on: z.string().min(1, "Record the approval date"),
-});
-
-type ApprovalValues = z.infer<typeof approvalSchema>;
-
 const MAX_PROOF_BYTES = 25 * 1024 * 1024;
 
 export function ApprovalForm({
@@ -492,7 +462,7 @@ export function ApprovalForm({
   const [file, setFile] = React.useState<File | null>(null);
   const [fileError, setFileError] = React.useState<string | null>(null);
 
-  const form = useApiForm<ApprovalValues>(approvalSchema, {
+  const form = useApiForm(approvalSchema, {
     approval_type: "security",
     reference_no: "",
     approved_on: "",

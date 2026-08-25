@@ -14,7 +14,6 @@
 "use client";
 
 import * as React from "react";
-import { z } from "zod";
 
 import { CheckboxGroup, FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -29,22 +28,12 @@ import { useDataCategories, useEnums } from "@/features/meta";
 import { useProcessors } from "@/features/registry";
 import type { DataSource, Processor } from "@/types";
 import { useToast } from "@/providers";
+import {
+  processorSchema,
+  sourceSchema,
+} from "@/features/registry/schemas";
 
 /* ================================================================ processor */
-
-const processorSchema = z.object({
-  legal_name: z.string().min(1, "The registered legal name is required").max(255),
-  type: z.string().min(1, "Choose a type"),
-  contract_ref: z.string().min(1, "A contract reference is required").max(120),
-  security_confirmed_at: z
-    .string()
-    .min(1, "Record the date security was confirmed")
-    .refine((v) => new Date(v) <= new Date(), {
-      message: "A confirmation cannot be dated in the future",
-    }),
-});
-
-type ProcessorValues = z.infer<typeof processorSchema>;
 
 export function ProcessorForm({
   processor,
@@ -58,7 +47,7 @@ export function ProcessorForm({
   const create = useCreateProcessor();
   const update = useUpdateProcessor(processor?.processor_uuid ?? "");
 
-  const form = useApiForm<ProcessorValues>(processorSchema, {
+  const form = useApiForm(processorSchema, {
     legal_name: processor?.legal_name ?? "",
     type: processor?.type ?? "lab",
     contract_ref: processor?.contract_ref ?? "",
@@ -140,22 +129,6 @@ export function ProcessorForm({
 
 /* =================================================================== source */
 
-const sourceSchema = z.object({
-  source_code: z
-    .string()
-    .min(1, "A code is required")
-    .max(60)
-    .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, "Letters, digits, dot, dash and underscore only"),
-  name: z.string().min(1, "A name is required").max(200),
-  source_role: z.string().min(1, "Choose a role"),
-  exchange_mode: z.string().min(1, "Choose an exchange mode"),
-  id_scheme: z.string().max(120).optional().nullable(),
-  processor_uuid: z.string().optional().nullable(),
-  is_authoritative_for: z.array(z.string()),
-});
-
-type SourceValues = z.infer<typeof sourceSchema>;
-
 export function SourceForm({ source, onDone }: { source?: DataSource; onDone: () => void }) {
   const toast = useToast();
   const { data: enums } = useEnums();
@@ -165,7 +138,7 @@ export function SourceForm({ source, onDone }: { source?: DataSource; onDone: ()
   const create = useCreateSource();
   const update = useUpdateSource(source?.source_uuid ?? "");
 
-  const form = useApiForm<SourceValues>(sourceSchema, {
+  const form = useApiForm(sourceSchema, {
     source_code: source?.source_code ?? "",
     name: source?.name ?? "",
     source_role: source?.source_role ?? "collection",

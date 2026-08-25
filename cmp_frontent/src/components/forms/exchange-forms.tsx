@@ -16,7 +16,6 @@
 
 import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
 import * as React from "react";
-import { z } from "zod";
 
 import { FileInput, FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -26,6 +25,7 @@ import { useProjects, useSites } from "@/features/projects";
 import { useSources } from "@/features/registry";
 import type { DataSource, ImportValidation, Page } from "@/types";
 import { useToast } from "@/providers";
+import { exportSchema } from "@/features/exchange/schemas";
 
 const MAX_MANIFEST_BYTES = 25 * 1024 * 1024;
 
@@ -246,13 +246,6 @@ function ValidationReport({ result }: { result: ImportValidation }) {
 
 /* ==================================================================== export */
 
-const exportSchema = z.object({
-  type: z.string().min(1, "Choose what to export"),
-  site: z.string().min(1, "Choose a site"),
-});
-
-type ExportValues = z.infer<typeof exportSchema>;
-
 export function ExportForm({
   projectUuid,
   onDone,
@@ -264,7 +257,7 @@ export function ExportForm({
   const create = useCreateExport(projectUuid);
   const { data: sites } = useSites(projectUuid);
 
-  const form = useApiForm<ExportValues>(exportSchema, { type: "collection_pack", site: "" });
+  const form = useApiForm(exportSchema, { type: "collection_pack", site: "" });
   const type = form.watch("type");
 
   const onSubmit = form.submit(async (values) => {

@@ -14,7 +14,6 @@
 
 import { AlertTriangle, Trash2 } from "lucide-react";
 import * as React from "react";
-import { z } from "zod";
 
 import { FormError, useApiForm } from "@/components/forms/form";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -40,35 +39,12 @@ import { useAllNotices, useNoticePurposes } from "@/features/notices";
 import { usePurposes } from "@/features/registry";
 import type { LanguageCode, Notice } from "@/types";
 import { useToast } from "@/providers";
+import {
+  languageSchema,
+  noticeSchema,
+} from "@/features/notices/schemas";
 
 /* =================================================================== notice */
-
-const httpUrl = z
-  .string()
-  .min(1, "Required")
-  .regex(/^https?:\/\/[^\s<>"]+$/, "Must be an http(s) URL a data subject can open");
-
-const noticeSchema = z.object({
-  // Optional: blank means "let the server mint one". Still validated when given,
-  // because a code someone typed by hand has to satisfy the same rule.
-  notice_code: z
-    .string()
-    .max(80)
-    .regex(
-      /^([A-Za-z0-9][A-Za-z0-9._-]*)?$/,
-      "Letters, digits, dot, dash and underscore only",
-    )
-    .optional(),
-  withdraw_url: httpUrl,
-  exercise_rights_url: httpUrl,
-  board_complaint_url: httpUrl,
-  dpo_contact: z.string().min(3, "How the DPO can be reached").max(255),
-  change_class: z.string().optional().nullable(),
-  language_code: z.string().optional(),
-  rendered_text: z.string().optional(),
-});
-
-type NoticeValues = z.infer<typeof noticeSchema>;
 
 export function NoticeForm({
   projectUuid,
@@ -89,7 +65,7 @@ export function NoticeForm({
   // numbering scheme it has to match.
   const [ownCode, setOwnCode] = React.useState(false);
 
-  const form = useApiForm<NoticeValues>(noticeSchema, {
+  const form = useApiForm(noticeSchema, {
     notice_code: notice?.notice_code ?? "",
     withdraw_url: notice?.withdraw_url ?? "",
     exercise_rights_url: notice?.exercise_rights_url ?? "",
@@ -451,13 +427,6 @@ export function NoticePurposesForm({
 
 /* ======================================================= language rendition */
 
-const languageSchema = z.object({
-  language_code: z.string().min(1, "Choose a language"),
-  rendered_text: z.string().min(50, "The notice text looks too short to be complete"),
-});
-
-type LanguageValues = z.infer<typeof languageSchema>;
-
 export function LanguageForm({
   noticeUuid,
   existingCode,
@@ -476,7 +445,7 @@ export function LanguageForm({
   const { data: enums } = useEnums();
   const save = useSetLanguage(noticeUuid);
 
-  const form = useApiForm<LanguageValues>(languageSchema, {
+  const form = useApiForm(languageSchema, {
     language_code: existingCode ?? "english",
     rendered_text: existingText ?? "",
   });

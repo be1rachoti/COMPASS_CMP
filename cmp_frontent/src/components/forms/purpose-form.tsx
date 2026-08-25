@@ -76,7 +76,7 @@ export function PurposeForm({
   const create = useCreatePurpose();
   const update = useUpdatePurpose(purpose?.purpose_uuid ?? "");
 
-  const form = useApiForm<FormValues>(schema, {
+  const form = useApiForm(schema, {
     purpose_code: purpose?.purpose_code ?? "",
     name: purpose?.name ?? "",
     description: purpose?.description ?? "",
