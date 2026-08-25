@@ -24,7 +24,7 @@ from fastapi import APIRouter, Response, status
 from cmp.core.config import settings
 from cmp.db import pool
 from cmp.db import redis as redis_db
-from cmp.domain.state_machine import ALL_STATUSES
+from cmp.domain.projects.state_machine import ALL_STATUSES
 from cmp.schemas.common import Out
 
 router = APIRouter(tags=["system"])

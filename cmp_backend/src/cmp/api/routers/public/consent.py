@@ -27,9 +27,9 @@ from cmp.core.errors import Unauthenticated
 from cmp.core.permissions import Role
 from cmp.db.pool import transaction
 from cmp.db.repositories import notices as notice_repo
-from cmp.domain import audit
-from cmp.domain import consent as service
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
+from cmp.domain.consent import service as service
 from cmp.schemas.common import Acknowledged, Mobile, OtpCode, Out, Schema, ShortText
 
 router = APIRouter(tags=["public consent"])

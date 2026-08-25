@@ -32,10 +32,10 @@ from cmp.core.security import file_hash
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import consent as consent_repo
 from cmp.db.repositories import projects as repo
-from cmp.domain import audit
-from cmp.domain import consent as consent_service
-from cmp.domain import projects as service
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
+from cmp.domain.consent import service as consent_service
+from cmp.domain.projects import service as service
 from cmp.infrastructure.storage import read_upload, save_approval_proof
 from cmp.schemas.common import Acknowledged, LongText, Out, Page, Schema, ShortText
 

@@ -22,9 +22,9 @@ from cmp.core.permissions import Role
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import exchange as repo
 from cmp.db.repositories import projects as project_repo
-from cmp.domain import audit
-from cmp.domain import exchange as service
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
+from cmp.domain.exchange import service as service
 from cmp.schemas.common import Out, Page, Schema
 
 router = APIRouter(tags=["exchange"])

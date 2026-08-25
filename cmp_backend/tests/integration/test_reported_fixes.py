@@ -14,7 +14,7 @@ import pytest
 from cmp.core.errors import NoticeIncomplete
 from cmp.core.permissions import Role
 from cmp.db.repositories import entities as entity_repo
-from cmp.domain import notices as notice_service
+from cmp.domain.notices import service as notice_service
 
 pytestmark = pytest.mark.integration
 

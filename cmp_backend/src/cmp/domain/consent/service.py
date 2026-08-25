@@ -34,8 +34,8 @@ from cmp.db.repositories import notices as notice_repo
 from cmp.db.repositories import projects as project_repo
 from cmp.db.repositories import users as user_repo
 from cmp.db.sql import Conn
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 
 log = get_logger("cmp.consent")
 
@@ -204,8 +204,8 @@ async def send_contact_code(conn: Conn, *, token: str, contact: str) -> None:
     )
 
     issued = await otp.issue(otp.Scope.CONSENT_LINK, f"{link['link_uuid']}:{contact.lower()}")
+    from cmp.tasks.authentication import send_consent_code
     from cmp.tasks.dispatch import dispatch_required
-    from cmp.tasks.notifications import send_consent_code
 
     dispatch_required(send_consent_code, contact, issued.code)
 

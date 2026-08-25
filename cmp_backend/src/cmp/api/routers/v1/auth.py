@@ -25,8 +25,8 @@ from cmp.auth.sessions import service as sessions
 from cmp.core.config import settings
 from cmp.core.errors import NotFound, Unauthenticated
 from cmp.db.pool import connection, transaction
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 from cmp.schemas.common import Acknowledged, OtpCode, Out, Password, Schema
 
 router = APIRouter(prefix="/auth", tags=["auth"])

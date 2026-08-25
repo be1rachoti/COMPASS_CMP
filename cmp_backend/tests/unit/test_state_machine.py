@@ -14,7 +14,7 @@ import pytest
 
 from cmp.core.errors import TransitionNotPermitted
 from cmp.core.permissions import Role
-from cmp.domain.state_machine import (
+from cmp.domain.projects.state_machine import (
     ProjectFacts,
     ProjectStatus,
     available,

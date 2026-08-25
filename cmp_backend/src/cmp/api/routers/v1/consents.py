@@ -19,8 +19,8 @@ from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import consent as repo
 from cmp.db.repositories import projects as project_repo
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 from cmp.schemas.common import Acknowledged, Out, Page
 
 router = APIRouter(tags=["consent"])

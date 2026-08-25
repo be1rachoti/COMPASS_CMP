@@ -28,8 +28,8 @@ from cmp.core.security import hash_password, new_token
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import users as repo
 from cmp.db.sql import unique_violation
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 from cmp.schemas.common import Acknowledged, Mobile, Out, Page, Schema, ShortText
 
 router = APIRouter(prefix="/users", tags=["users"])

@@ -37,8 +37,8 @@ from cmp.db.repositories import notices as notice_repo
 from cmp.db.repositories import projects as project_repo
 from cmp.db.repositories import registry as registry_repo
 from cmp.db.sql import Conn
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 
 log = get_logger("cmp.exchange")
 

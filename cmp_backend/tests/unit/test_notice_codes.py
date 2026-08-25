@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from cmp.domain.notices import _slug
+from cmp.domain.notices.service import _slug
 
 #: The rule `CodeText` enforces on a notice_code the DPO supplies by hand.
 CODE_RULE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")

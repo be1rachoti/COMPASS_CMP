@@ -28,7 +28,7 @@ from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import notices as repo
 from cmp.db.repositories import projects as project_repo
-from cmp.domain import notices as service
+from cmp.domain.notices import service as service
 from cmp.schemas.common import Acknowledged, CodeText, HttpUrl, LongText, Out, Page, Schema
 
 router = APIRouter(tags=["notices"])

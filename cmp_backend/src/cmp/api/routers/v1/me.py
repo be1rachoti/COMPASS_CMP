@@ -19,9 +19,9 @@ from cmp.db.pool import connection, transaction
 from cmp.db.repositories import consent as consent_repo
 from cmp.db.repositories import exchange as exchange_repo
 from cmp.db.repositories import users as user_repo
-from cmp.domain import audit
-from cmp.domain import consent as consent_service
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
+from cmp.domain.consent import service as consent_service
 from cmp.schemas.common import Acknowledged, Mobile, OtpCode, Out, Schema, ShortText
 
 router = APIRouter(prefix="/me", tags=["me"])

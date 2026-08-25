@@ -83,7 +83,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # S105 flags the audit event vocabulary ("auth.password_changed") as a hardcoded
 # password. It is a constant naming an event type, not a credential.
-"src/cmp/domain/audit.py" = ["S105"]
+"src/cmp/domain/audit/service.py" = ["S105"]
 
 # S608 flags f-string SQL. In the repository layer every interpolated fragment is
 # built from validated identifiers - a sort column checked against a per-route

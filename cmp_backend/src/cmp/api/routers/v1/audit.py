@@ -22,7 +22,7 @@ from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection
 from cmp.db.repositories import audit as repo
 from cmp.db.repositories import entities as entity_repo
-from cmp.domain import audit as audit_service
+from cmp.domain.audit import service as audit_service
 from cmp.schemas.common import Out, Page
 
 router = APIRouter(prefix="/audit", tags=["audit"])

@@ -15,9 +15,9 @@ from cmp.core.permissions import Role
 from cmp.db.repositories import projects as repo
 from cmp.db.repositories import users as user_repo
 from cmp.db.sql import Conn
-from cmp.domain import audit
-from cmp.domain.audit import Event
-from cmp.domain.state_machine import (
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
+from cmp.domain.projects.state_machine import (
     ProjectFacts,
     ProjectStatus,
     available,
@@ -158,7 +158,7 @@ async def transition(
     # be collecting against text nobody froze.
     published_notice = None
     if permitted.publishes_notice:
-        from cmp.domain import notices as notice_service
+        from cmp.domain.notices import service as notice_service
 
         published_notice = await notice_service.publish_current(
             conn, project_id=project["project_id"], actor_id=actor_id

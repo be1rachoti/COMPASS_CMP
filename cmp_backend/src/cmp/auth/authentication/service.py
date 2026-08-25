@@ -29,8 +29,8 @@ from cmp.core.permissions import Role, nav_for
 from cmp.core.security import hash_password, password_needs_rehash, verify_password
 from cmp.db.repositories import users as user_repo
 from cmp.db.sql import Conn
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 
 log = get_logger("cmp.auth")
 
@@ -124,8 +124,8 @@ async def authenticate(
     if mfa_needed:
         issued = await otp.issue(otp.Scope.STAFF_MFA, str(user["uuid"]), ttl_s=settings.mfa_ttl_s)
         # Delivery is a side effect and belongs off the request path.
+        from cmp.tasks.authentication import send_mfa_code
         from cmp.tasks.dispatch import dispatch_required
-        from cmp.tasks.notifications import send_mfa_code
 
         dispatch_required(send_mfa_code, str(user["uuid"]), user["email"], issued.code)
     else:
@@ -202,8 +202,8 @@ async def resend_mfa(conn: Conn, *, user_uuid: str, email: str) -> None:
         message="Too many code requests. Wait a few minutes.",
     )
     issued = await otp.issue(otp.Scope.STAFF_MFA, user_uuid, ttl_s=settings.mfa_ttl_s)
+    from cmp.tasks.authentication import send_mfa_code
     from cmp.tasks.dispatch import dispatch_required
-    from cmp.tasks.notifications import send_mfa_code
 
     dispatch_required(send_mfa_code, user_uuid, email, issued.code)
 
@@ -228,8 +228,8 @@ async def request_subject_otp(conn: Conn, *, contact: str) -> None:
         return
 
     issued = await otp.issue(otp.Scope.SUBJECT_LOGIN, str(user["uuid"]))
+    from cmp.tasks.authentication import send_login_code
     from cmp.tasks.dispatch import dispatch_required
-    from cmp.tasks.notifications import send_login_code
 
     dispatch_required(send_login_code, str(user["uuid"]), contact, issued.code)
 
@@ -332,8 +332,8 @@ async def request_password_reset(conn: Conn, *, email: str) -> None:
         return
 
     issued = await otp.issue(otp.Scope.CONTACT_VERIFY, f"reset:{user['uuid']}", ttl_s=900)
+    from cmp.tasks.authentication import send_password_reset
     from cmp.tasks.dispatch import dispatch_required
-    from cmp.tasks.notifications import send_password_reset
 
     dispatch_required(send_password_reset, str(user["uuid"]), user["email"], issued.code)
     await audit.record(

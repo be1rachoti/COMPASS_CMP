@@ -116,7 +116,12 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(
-    ["cmp.tasks.notifications", "cmp.tasks.maintenance", "cmp.tasks.exchange"], force=True
+    [
+        "cmp.tasks.authentication",
+        "cmp.tasks.notifications",
+        "cmp.tasks.maintenance",
+        "cmp.tasks.exchange",
+    ], force=True
 )
 
 

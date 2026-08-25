@@ -321,7 +321,7 @@ async def resend(log_uuid: UUID, principal: CurrentUser) -> dict[str, Any]:
             raise NotFound("Notification recipient")
 
     from cmp.tasks.dispatch import dispatch_required
-    from cmp.tasks.notifications import notify_project_event
+    from cmp.tasks.notifications.batch import notify_project_event
 
     dispatch_required(
         notify_project_event,

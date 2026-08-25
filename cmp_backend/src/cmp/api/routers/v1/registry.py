@@ -26,8 +26,8 @@ from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import registry as repo
 from cmp.db.sql import unique_violation
-from cmp.domain import audit
-from cmp.domain.audit import Event
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 from cmp.schemas.common import Acknowledged, CodeText, LongText, Out, Page, Schema, ShortText
 
 router = APIRouter(tags=["registry"])
