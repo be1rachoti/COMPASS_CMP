@@ -20,12 +20,14 @@ from fastapi import APIRouter, Request, Response, status
 from pydantic import EmailStr, Field
 
 from cmp.api.deps import set_session_cookies
+from cmp.auth.rate_limit import service as ratelimit
+from cmp.auth.sessions import service as sessions
 from cmp.core.config import settings
 from cmp.core.errors import NotFound, Unauthenticated
 from cmp.core.permissions import Role
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import notices as notice_repo
-from cmp.domain import audit, ratelimit, sessions
+from cmp.domain import audit
 from cmp.domain import consent as service
 from cmp.domain.audit import Event
 from cmp.schemas.common import Acknowledged, Mobile, OtpCode, Out, Schema, ShortText

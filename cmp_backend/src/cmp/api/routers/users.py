@@ -20,6 +20,7 @@ from cmp.api.deps import (
     RequireStaff,
     reject_unknown_filters,
 )
+from cmp.auth.sessions import service as sessions
 from cmp.core.errors import Conflict, ValidationFailed
 from cmp.core.pagination import PageRequest
 from cmp.core.permissions import Role
@@ -27,7 +28,7 @@ from cmp.core.security import hash_password, new_token
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import users as repo
 from cmp.db.sql import unique_violation
-from cmp.domain import audit, sessions
+from cmp.domain import audit
 from cmp.domain.audit import Event
 from cmp.schemas.common import Acknowledged, Mobile, Out, Page, Schema, ShortText
 
@@ -281,7 +282,7 @@ async def force_logout(user_uuid: UUID, principal: RequireAdmin) -> dict[str, An
 
 @router.post("/{user_uuid}/mfa/reset", response_model=Acknowledged)
 async def reset_mfa(user_uuid: UUID, principal: RequireAdmin) -> dict[str, Any]:
-    from cmp.domain import otp
+    from cmp.auth.authentication import otp
 
     async with transaction() as conn:
         user = await repo.require_by_uuid(conn, str(user_uuid))

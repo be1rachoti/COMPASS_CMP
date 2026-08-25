@@ -17,10 +17,11 @@ from typing import Any
 
 from celery import shared_task
 
+from cmp.auth.rate_limit import service as ratelimit
 from cmp.core.logging import get_logger
 from cmp.db.pool import close_pool, open_pool, transaction
 from cmp.db.redis import close_redis, open_redis
-from cmp.domain import audit, ratelimit
+from cmp.domain import audit
 from cmp.domain.audit import Event
 
 log = get_logger("cmp.tasks.maintenance")

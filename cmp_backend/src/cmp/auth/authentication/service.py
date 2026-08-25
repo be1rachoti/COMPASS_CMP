@@ -19,6 +19,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from cmp.auth.authentication import otp
+from cmp.auth.rate_limit import service as ratelimit
+from cmp.auth.sessions import service as sessions
 from cmp.core.config import settings
 from cmp.core.errors import BadRequest, Forbidden, RateLimited, Unauthenticated
 from cmp.core.logging import get_logger
@@ -26,7 +29,7 @@ from cmp.core.permissions import Role, nav_for
 from cmp.core.security import hash_password, password_needs_rehash, verify_password
 from cmp.db.repositories import users as user_repo
 from cmp.db.sql import Conn
-from cmp.domain import audit, otp, ratelimit, sessions
+from cmp.domain import audit
 from cmp.domain.audit import Event
 
 log = get_logger("cmp.auth")

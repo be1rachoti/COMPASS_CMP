@@ -101,7 +101,7 @@ async def update_me(body: UpdateMe, principal: RequireDataSubject) -> dict[str, 
 
 @router.post("/contact/verify", response_model=Acknowledged)
 async def verify_contact(body: ContactVerify, principal: RequireDataSubject) -> dict[str, Any]:
-    from cmp.domain import otp
+    from cmp.auth.authentication import otp as otp
 
     await otp.require(otp.Scope.CONTACT_VERIFY, f"{principal.uuid}:{body.contact}", body.code)
     async with transaction() as conn:

@@ -18,14 +18,14 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Query, Request
 
+from cmp.auth.sessions import service as sessions
+from cmp.auth.sessions.service import Session
 from cmp.core.config import settings
 from cmp.core.context import bind_actor
 from cmp.core.errors import Forbidden, MfaRequired, Unauthenticated
 from cmp.core.pagination import PageRequest, parse_page
 from cmp.core.permissions import Role, Scope, scope_of
 from cmp.core.security import csrf_matches
-from cmp.domain import sessions
-from cmp.domain.sessions import Session
 
 # Verbs that change state must present the CSRF header. Safe verbs must not need
 # it - requiring it on GET breaks every link a browser can follow.

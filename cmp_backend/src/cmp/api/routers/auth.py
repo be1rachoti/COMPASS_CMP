@@ -20,11 +20,12 @@ from cmp.api.deps import (
     clear_session_cookies,
     set_session_cookies,
 )
+from cmp.auth.authentication import service as auth_service
+from cmp.auth.sessions import service as sessions
 from cmp.core.config import settings
 from cmp.core.errors import NotFound, Unauthenticated
 from cmp.db.pool import connection, transaction
-from cmp.domain import audit, sessions
-from cmp.domain import auth as auth_service
+from cmp.domain import audit
 from cmp.domain.audit import Event
 from cmp.schemas.common import Acknowledged, OtpCode, Out, Password, Schema
 

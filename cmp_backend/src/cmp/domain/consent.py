@@ -17,6 +17,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from cmp.auth.authentication import otp
+from cmp.auth.rate_limit import service as ratelimit
 from cmp.core.config import settings
 from cmp.core.errors import (
     Conflict,
@@ -32,7 +34,7 @@ from cmp.db.repositories import notices as notice_repo
 from cmp.db.repositories import projects as project_repo
 from cmp.db.repositories import users as user_repo
 from cmp.db.sql import Conn
-from cmp.domain import audit, otp, ratelimit
+from cmp.domain import audit
 from cmp.domain.audit import Event
 
 log = get_logger("cmp.consent")

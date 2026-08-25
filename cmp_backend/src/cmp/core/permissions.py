@@ -1,16 +1,22 @@
-"""Role model and row scope.
+"""The authorisation vocabulary and the permission table.
 
-Two separate questions, deliberately kept separate:
+Two things live here and nothing else: the types that name an authorisation
+concept, and the static table mapping resource x role -> grant.
 
-1. **May this role call this route at all?** — a static matrix, checked before
-   any work is done.
-2. **Which rows may this user see?** — a *scope*, which the repository turns into
-   a WHERE clause. Never a filter applied to a result set: hiding a row that is
-   already in the response is not access control.
+Both are *data*. There is no evaluation with side effects in this module - no
+raising, no logging, no audit row. Those belong to `cmp.auth.authorization`,
+which imports from here.
 
-`role` is authorisation and `person_type` is identity (DATA-MODEL §Identity).
-Nothing here reads person_type — a DPO who becomes an ex-employee keeps her
-permissions until someone changes her role.
+The split is what keeps the dependency graph acyclic, and it is not cosmetic.
+Half the codebase needs to name a `Role`: a repository takes one to build its
+scope predicate, the state machine takes one to decide a transition, a response
+model serialises one. None of them should have to import the authorisation
+package - which sits *above* them - to do it. `core` depends on nothing local,
+so anything may depend on `core`.
+
+`role` is authorisation and `person_type` is identity (DATA-MODEL, Identity).
+Nothing here reads person_type: a DPO who becomes an ex-employee keeps her
+permissions until somebody changes her role.
 """
 
 from __future__ import annotations
@@ -20,6 +26,8 @@ from enum import StrEnum
 
 
 class Role(StrEnum):
+    """The five roles. Values match the `user_role` PostgreSQL enum exactly."""
+
     DPO = "dpo"
     DCO = "dco"
     RND_USER = "rnd_user"
@@ -27,21 +35,29 @@ class Role(StrEnum):
     DATA_SUBJECT = "data_subject"
 
 
-STAFF_ROLES: frozenset[Role] = frozenset({Role.DPO, Role.DCO, Role.RND_USER, Role.ADMIN})
-PRIVILEGED_ROLES: frozenset[Role] = frozenset({Role.DPO, Role.ADMIN})
-
-
 class Scope(StrEnum):
-    """How far a role can see within a resource it is permitted to call."""
+    """How far a role can see within a resource it is permitted to call.
+
+    A scope is only ever realised as a WHERE predicate. Applying it to rows that
+    have already been fetched is not access control - the rows are already in
+    the response, they were already counted, they already moved a cursor.
+    """
 
     ALL = "all"        # every row
-    SCOPED = "scoped"  # rows assigned to them (DCO: projects they are DCO of)
-    OWN = "own"        # rows they created / that are about them
+    SCOPED = "scoped"  # rows assigned to them (a DCO: projects they are DCO of)
+    OWN = "own"        # rows they created, or that are about them
     NONE = "none"      # no rows
 
 
 @dataclass(frozen=True, slots=True)
 class Grant:
+    """What one role holds on one resource.
+
+    Frozen: a grant read out of the matrix must not be editable by the code that
+    read it. A mutable grant is one careless line away from a request widening
+    its own permissions for the rest of the process.
+    """
+
     scope: Scope
     write: bool = False
 

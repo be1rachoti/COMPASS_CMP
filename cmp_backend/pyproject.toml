@@ -134,7 +134,12 @@ warn_return_any = false
 # Redis directly relax exactly these checks. Everything above them - the services
 # and routes that consume their return values - stays strict.
 [[tool.mypy.overrides]]
-module = ["cmp.domain.sessions", "cmp.domain.ratelimit", "cmp.domain.otp", "cmp.db.redis"]
+module = [
+    "cmp.auth.sessions.service",
+    "cmp.auth.rate_limit.service",
+    "cmp.auth.authentication.otp",
+    "cmp.db.redis",
+]
 disable_error_code = ["misc", "no-any-return", "no-untyped-call", "type-arg", "arg-type"]
 
 # ---------------------------------------------------------------- pytest
