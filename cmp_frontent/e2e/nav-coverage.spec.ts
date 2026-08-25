@@ -9,17 +9,17 @@
  *
  * Runs serially: these are authenticated sessions against a rate-limited API.
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { statePath } from "./support/session";
 
 test.describe.configure({ mode: "serial" });
-
-const PASSWORD = "SeedPassw0rd!2026";
 
 /** Roles that sign in with one step. DPO and admin need an MFA code that only
  *  exists in the dev outbox, so they are covered by the backend tests instead. */
 const ROLES = [
   {
-    login: "dco@cmp.local",
+    role: "dco",
     name: "DCO",
     expected: [
       "/dashboard",
@@ -33,28 +33,25 @@ const ROLES = [
     ],
   },
   {
-    login: "rnd@cmp.local",
+    role: "rnd",
     name: "R&D User",
     expected: ["/dashboard", "/projects", "/approvals", "/imports", "/collections"],
   },
 ];
 
-async function signIn(page: Page, login: string) {
-  await page.goto("/sign-in");
-  await page.getByLabel(/email or username/i).fill(login);
-  await page.getByLabel(/^password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-  // The shell renders after /auth/me resolves, so the nav is not in the DOM the
-  // instant the URL changes. Wait for a real link rather than reading an empty
-  // list and concluding the sidebar is empty.
-  await page.locator("#sidebar-nav a").first().waitFor({ state: "attached", timeout: 15_000 });
-}
-
 for (const role of ROLES) {
   test.describe(`${role.name}`, () => {
+    // Each role's session is saved once by the setup project. Signing in here
+    // would put four workers through the login endpoint as the same account and
+    // trip the lockout.
+    test.use({ storageState: statePath(role.role) });
+
     test("every sidebar link reaches a real page", async ({ page }) => {
-      await signIn(page, role.login);
+      await page.goto("/dashboard");
+      await page
+        .locator("#sidebar-nav a")
+        .first()
+        .waitFor({ state: "attached", timeout: 15_000 });
 
       // Take the destinations from the rendered sidebar, not from a hardcoded
       // list: the sidebar is built from what the *server* says this role has, so
@@ -90,7 +87,11 @@ for (const role of ROLES) {
     });
 
     test("the expected sections are present", async ({ page }) => {
-      await signIn(page, role.login);
+      await page.goto("/dashboard");
+      await page
+        .locator("#sidebar-nav a")
+        .first()
+        .waitFor({ state: "attached", timeout: 15_000 });
 
       const hrefs = await page
         .locator("#sidebar-nav a")
@@ -104,7 +105,11 @@ for (const role of ROLES) {
     });
 
     test("no section this role may not use is offered", async ({ page }) => {
-      await signIn(page, role.login);
+      await page.goto("/dashboard");
+      await page
+        .locator("#sidebar-nav a")
+        .first()
+        .waitFor({ state: "attached", timeout: 15_000 });
 
       const hrefs = await page
         .locator("#sidebar-nav a")

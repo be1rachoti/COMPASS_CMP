@@ -24,10 +24,11 @@ import {
 
 export const projectSchema = z.object({
   project_name: shortText("A project name"),
-  // No max here beyond LongText's: the description is what a DPO reads to
-  // decide whether the purposes are honest, and truncating it at review time
-  // would be exactly the wrong economy.
-  description: longText("A description of what this project collects and why"),
+  // The message is an instruction rather than a label, because this is the
+  // field where a vague answer costs a DPO a round trip. No maximum beyond
+  // LongText's: this is what a DPO reads to decide whether the purposes are
+  // honest, and truncating it at review time would be the wrong economy.
+  description: longText("A description", "Describe what this project collects and why"),
   dco_user_uuid: uuid("The Data Collection Owner"),
   internal_project_name: optional(shortText("The internal name")),
   requesting_team: optional(refText("The requesting team")),

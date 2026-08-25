@@ -263,26 +263,3 @@ export function EmptyProjects() {
   );
 }
 
-/** A magnifier over a grid — used when a filter matches nothing. */
-export function EmptySearch() {
-  return (
-    <Frame>
-      <g className="stroke-[var(--border)]" strokeWidth="1.5">
-        {[26, 44, 62].map((y) => (
-          <line key={y} x1="24" y1={y} x2="96" y2={y} />
-        ))}
-      </g>
-      <circle
-        cx="66" cy="40" r="19"
-        className="fill-[var(--surface)] stroke-[var(--accent-border)]"
-        strokeWidth="2"
-        fillOpacity="0.9"
-      />
-      <line
-        x1="80" y1="54" x2="92" y2="66"
-        className="stroke-[var(--accent-border)]"
-        strokeWidth="3"
-      />
-    </Frame>
-  );
-}

@@ -59,14 +59,6 @@ export function hasRole(me: Me | null | undefined, ...roles: Role[]): boolean {
   return Boolean(me && roles.includes(me.role));
 }
 
-export function isStaff(me: Me | null | undefined): boolean {
-  return Boolean(me && me.role !== "data_subject");
-}
-
-export function isSubject(me: Me | null | undefined): boolean {
-  return me?.role === "data_subject";
-}
-
 /**
  * A full session, not a partial one.
  *

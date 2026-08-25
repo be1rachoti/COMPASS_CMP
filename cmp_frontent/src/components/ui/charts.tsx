@@ -128,32 +128,6 @@ export function StatTile({
   );
 }
 
-/**
- * The one number a page leads with. Reserved — a dashboard has at most one, or
- * it has none.
- */
-export function HeroFigure({
-  value,
-  label,
-  caption,
-}: {
-  value: number | string;
-  label: string;
-  caption?: string;
-}) {
-  return (
-    <div>
-      <p className="text-2xs font-semibold uppercase tracking-wider text-text-subtle">
-        {label}
-      </p>
-      <p className="mt-1 text-hero font-semibold tabular tracking-tight text-text">
-        {typeof value === "number" ? value.toLocaleString("en-IN") : value}
-      </p>
-      {caption && <p className="mt-1 text-sm text-text-muted">{caption}</p>}
-    </div>
-  );
-}
-
 /* ==================================================================== meter */
 
 /**
@@ -362,68 +336,6 @@ export function BarList({
 }
 
 /* ============================================================ progress ring */
-
-/**
- * A completeness ratio, as a ring.
- *
- * Used for the notice publication checklist, where the reader wants "how close
- * am I" at a glance and the detail sits beside it as a list. The figure is
- * printed in the middle, so the ring is reinforcement rather than the only
- * encoding.
- */
-export function ProgressRing({
-  done,
-  total,
-  size = 72,
-  label,
-}: {
-  done: number;
-  total: number;
-  size?: number;
-  label?: string;
-}) {
-  const pct = total > 0 ? done / total : 0;
-  const stroke = 6;
-  const r = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * r;
-  const complete = total > 0 && done >= total;
-
-  return (
-    <div className="relative inline-grid place-items-center" style={{ width: size, height: size }}>
-      <svg
-        width={size}
-        height={size}
-        className="-rotate-90"
-        role="img"
-        aria-label={`${label ?? "Progress"}: ${done} of ${total}`}
-      >
-        <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none"
-          strokeWidth={stroke}
-          className="stroke-[var(--viz-track)]"
-        />
-        <circle
-          cx={size / 2} cy={size / 2} r={r}
-          fill="none"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          className={complete ? "stroke-[var(--success)]" : "stroke-[var(--viz-2)]"}
-          style={{
-            strokeDasharray: circumference,
-            strokeDashoffset: circumference * (1 - pct),
-            transition: "stroke-dashoffset 620ms var(--ease-out-quint)",
-          }}
-        />
-      </svg>
-
-      <span className="absolute text-sm font-semibold tabular text-text">
-        {done}
-        <span className="text-text-subtle">/{total}</span>
-      </span>
-    </div>
-  );
-}
 
 /* ================================================================= pipeline */
 

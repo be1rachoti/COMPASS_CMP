@@ -67,11 +67,37 @@ export default defineConfig({
   },
 
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    /**
+     * Sign in once per role and save the session.
+     *
+     * Every authenticated project depends on this. Without it each test signs
+     * in for itself, and four workers doing that as the same account trips the
+     * API's login lockout - five attempts in thirty minutes - which then fails
+     * the rest of the run for a reason that looks like an application bug.
+     */
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+
+    /**
+     * The behavioural suite. `testIgnore` matters: without it the visual specs
+     * would also run here, against a viewport this project does not pin, and
+     * every screenshot would be compared to a baseline captured at a different
+     * size.
+     */
+    {
+      name: "chromium",
+      testIgnore: /visual\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"] },
+    },
 
     // The consent flow is used on phones at a collection site far more often
     // than on a desktop, so it is tested there too.
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    {
+      name: "mobile",
+      testIgnore: /visual\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { ...devices["Pixel 7"] },
+    },
 
     /**
      * The host people actually type. Only the auth-sensitive specs run here —
@@ -106,12 +132,32 @@ export default defineConfig({
     },
   ],
 
+  /**
+   * A production build, not `next dev`.
+   *
+   * This is not a preference. `next dev` compiles routes on demand, so the
+   * first request to a route pays for its compilation — and with four parallel
+   * workers hitting different routes at once, that wait exceeded the assertion
+   * timeout on roughly one run in five. The failures looked like application
+   * bugs (an element "not found", a screenshot one paint early) and were
+   * entirely the dev server.
+   *
+   * The tests that then failed passed individually, which is the signature of
+   * this problem and the reason it wastes so much time: the obvious next step
+   * is to investigate the test, and the test is fine.
+   *
+   * A build costs a minute up front and removes the whole class. For a fast
+   * local loop against a dev server already running, set E2E_BASE_URL and
+   * accept the flake knowingly.
+   */
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: `npm run dev -- --port ${PORT}`,
+        command: `npm run build && npm run start -- --port ${PORT}`,
         url: `${BASE_URL}/sign-in`,
         reuseExistingServer: !process.env.CI,
-        timeout: 120_000,
+        // A cold build on a laptop is comfortably inside four minutes; the
+        // default two would fail on a cold Next cache.
+        timeout: 300_000,
       },
 });

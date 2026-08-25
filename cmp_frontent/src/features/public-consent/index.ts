@@ -8,3 +8,4 @@
  */
 
 export * from "@/features/public-consent/api";
+export * from "@/features/public-consent/components";

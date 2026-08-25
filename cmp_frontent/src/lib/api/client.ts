@@ -28,7 +28,7 @@ const UNSAFE_METHODS = new Set(["post", "put", "patch", "delete"]);
 
 /** Read a cookie by name. Only used for the CSRF cookie, which is deliberately
  *  script-readable - that is the whole mechanism. */
-export function readCookie(name: string): string | null {
+function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(
     new RegExp(`(?:^|; )${name.replace(/([.*+?^${}()|[\]\\])/g, "\\$1")}=([^;]*)`),

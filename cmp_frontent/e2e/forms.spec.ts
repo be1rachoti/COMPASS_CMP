@@ -8,25 +8,18 @@
  * Serial, because they authenticate against a rate-limited API and several of
  * them depend on what the previous one created.
  */
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+
+import { statePath } from "./support/session";
 
 test.describe.configure({ mode: "serial" });
 
-const PASSWORD = "SeedPassw0rd!2026";
 const STAMP = Date.now().toString().slice(-6);
 
-async function signIn(page: Page, login: string) {
-  await page.goto("/sign-in");
-  await page.getByLabel(/email or username/i).fill(login);
-  await page.getByLabel(/^password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /^sign in$/i }).click();
-  await page.waitForURL(/\/dashboard/, { timeout: 15_000 });
-  await page.locator("#sidebar-nav a").first().waitFor({ state: "attached" });
-}
-
 test.describe("R&D User", () => {
+  test.use({ storageState: statePath("rnd") });
+
   test("registers a project through the form", async ({ page }) => {
-    await signIn(page, "rnd@cmp.local");
     await page.goto("/projects");
 
     await page.getByRole("button", { name: /register a project/i }).click();
@@ -51,7 +44,6 @@ test.describe("R&D User", () => {
   });
 
   test("refuses a project with no description", async ({ page }) => {
-    await signIn(page, "rnd@cmp.local");
     await page.goto("/projects");
     await page.getByRole("button", { name: /register a project/i }).click();
 
@@ -67,8 +59,9 @@ test.describe("R&D User", () => {
 });
 
 test.describe("DCO", () => {
+  test.use({ storageState: statePath("dco") });
+
   test("opens the import wizard and gates submit on a dry run", async ({ page }) => {
-    await signIn(page, "dco@cmp.local");
     await page.goto("/imports");
 
     await page.getByRole("button", { name: /import a manifest/i }).click();
@@ -82,11 +75,16 @@ test.describe("DCO", () => {
   });
 
   test("offers a consent link only for an approved project", async ({ page }) => {
-    await signIn(page, "dco@cmp.local");
-    await page.goto("/projects");
 
-    // The seeded project is approved, so its sites offer link creation.
-    await page.getByRole("link", { name: /gait identification/i }).first().click();
+    // Filtered rather than picked off the first page. This test used to click
+    // the seeded project directly, and passed until enough runs had created
+    // enough projects to push it past the first page - at which point it failed
+    // for a reason that had nothing to do with what it tests.
+    await page.goto("/projects?q=Gait+Identification");
+
+    const project = page.getByRole("link", { name: /gait identification/i }).first();
+    await expect(project).toBeVisible({ timeout: 15_000 });
+    await project.click();
     await page.waitForURL(/\/projects\//);
 
     await expect(page.getByRole("button", { name: /create link/i }).first()).toBeVisible({
@@ -96,8 +94,9 @@ test.describe("DCO", () => {
 });
 
 test.describe("DCO cannot reach what the matrix denies", () => {
+  test.use({ storageState: statePath("dco") });
+
   test("no provisioning control on a page they can read", async ({ page }) => {
-    await signIn(page, "dco@cmp.local");
 
     // /users is not in the DCO's nav at all - going straight there must not
     // render a create button even if the page itself loads.

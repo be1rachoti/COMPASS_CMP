@@ -10,38 +10,17 @@
  * matrix is the backend's answer, and asserting a fixed list here would be a
  * second copy of it.
  */
-import { readFileSync } from "node:fs";
-
 import { test, expect, type Page } from "@playwright/test";
 
-const DPO = { login: "dpo@cmp.local", password: "SeedPassw0rd!2026" };
+import { statePath } from "./support/session";
 
-/** The dev outbox is the only place an MFA code is readable in a local stack. */
-function latestCode(): string {
-  const lines = readFileSync("D:/workspace/cmp_backend/var/outbox.log", "utf8")
-    .split(/\r?\n/)
-    .reverse();
-  for (const line of lines) {
-    const match = /\b(\d{6})\b/.exec(line);
-    if (match) return match[1];
-  }
-  throw new Error("no verification code in the dev outbox");
-}
-
-async function signIn(page: Page) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email or username").fill(DPO.login);
-  await page.getByLabel("Password").fill(DPO.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/dashboard|verify/, { timeout: 20_000 });
-
-  if (page.url().includes("verify")) {
-    await page.waitForTimeout(1500);
-    await page.getByLabel(/digit code/i).fill(latestCode());
-    await page.getByRole("button", { name: /Verify and continue/ }).click();
-    await page.waitForURL(/dashboard/, { timeout: 20_000 });
-  }
-}
+/**
+ * Signed in as the DPO, once, by the setup project.
+ *
+ * Not per test: the API locks an account after five login attempts in thirty
+ * minutes, and a file of tests each signing in trips that inside one run.
+ */
+test.use({ storageState: statePath("dpo") });
 
 /**
  * Follow the first link in a list's table and assert the destination rendered.
@@ -75,10 +54,6 @@ async function followFirstRow(page: Page, listPath: string, hrefPrefix: string) 
 }
 
 test.describe("detail pages resolve", () => {
-  test.beforeEach(async ({ page }) => {
-    await signIn(page);
-  });
-
   test("a consent record opens from the register", async ({ page }) => {
     await followFirstRow(page, "/consents", "/consents/");
 

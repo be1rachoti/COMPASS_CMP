@@ -57,6 +57,32 @@ const buttonVariants = cva(
   },
 );
 
+/**
+ * The button's loading indicator.
+ *
+ * Module-private: it exists for `Button`, and a spinner used anywhere else
+ * would be a loading state that should have been a skeleton. Skeletons say
+ * what is coming; a spinner says only that something is happening.
+ */
+function Spinner({ className }: { className?: string }) {
+  return (
+    <svg
+      className={cn("animate-spin", className)}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path
+        d="M12 2a10 10 0 0 1 10 10"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
@@ -92,25 +118,6 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
-export function Spinner({ className }: { className?: string }) {
-  return (
-    <svg
-      className={cn("animate-spin", className)}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
-      <path
-        d="M12 2a10 10 0 0 1 10 10"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 /* ====================================================================== Card */
 export function Card({
   className,
@@ -135,27 +142,8 @@ export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHead
   return <h2 className={cn("text-base font-semibold", className)} {...props} />;
 }
 
-export function CardDescription({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("mt-1 text-sm text-text-muted", className)} {...props} />;
-}
-
 export function CardBody({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("p-5", className)} {...props} />;
-}
-
-export function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      className={cn(
-        "px-5 py-3 border-t border-border bg-bg-subtle rounded-b-xl flex items-center gap-2",
-        className,
-      )}
-      {...props}
-    />
-  );
 }
 
 /* ===================================================================== Badge */

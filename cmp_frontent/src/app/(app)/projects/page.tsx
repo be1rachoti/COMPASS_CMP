@@ -39,8 +39,12 @@ import { useAuth } from "@/providers";
 function ProjectsPageView() {
   const { me } = useAuth();
   const [status, setStatus] = useFilterParam("status");
-  const [search, setSearch] = React.useState("");
-  const [query, setQuery] = React.useState("");
+  // Seeded from the URL for the same reason `status` is: a filtered list should
+  // be a link somebody can send. It also means arriving here from a search
+  // elsewhere - or pressing Back - lands on the results rather than on
+  // everything.
+  const [search, setSearch] = useFilterParam("q");
+  const [query, setQuery] = useFilterParam("q");
 
   // The cursor stack: each entry is the cursor that produced that page, so
   // "Back" is a pop rather than a recomputation.

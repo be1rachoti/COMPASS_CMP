@@ -21,7 +21,7 @@ import * as React from "react";
 import { ApiError } from "@/lib/errors";
 import { config } from "@/lib/config";
 
-export function makeQueryClient(): QueryClient {
+function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {

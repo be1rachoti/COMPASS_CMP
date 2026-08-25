@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "cmp_session",
+      "value": "W1hHRfoNMUZSeMZWNSKZohIdEN3AR0RIq6peterxp54",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "expires": 1787703198.061979,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "cmp_csrf",
+      "value": "tPmDOav1X3Kq--uqrLkB04SPSu5CboTHOopQOFoXcxI",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "expires": 1787703204.223693,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

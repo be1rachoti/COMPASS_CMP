@@ -43,11 +43,15 @@ export const shortText = (field: string) =>
  * Mirrors `validation.strings.LongText`. 20,000 characters is roughly forty
  * pages — generous for prose, and still a bound.
  */
-export const longText = (field: string) =>
+export const longText = (field: string, whenEmpty?: string) =>
   z
     .string()
     .trim()
-    .min(1, `${field} is required`)
+    // `whenEmpty` is for the fields where naming the field is not enough help.
+    // "A description is required" tells somebody the box is empty, which they
+    // can see; "Describe what this project collects and why" tells them what to
+    // write. Use it wherever a vague answer would cost a reviewer a round trip.
+    .min(1, whenEmpty ?? `${field} is required`)
     .max(20_000, `${field} is longer than this system stores`);
 
 /**
