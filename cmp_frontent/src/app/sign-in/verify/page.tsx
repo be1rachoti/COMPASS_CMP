@@ -10,7 +10,7 @@
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
-import { AuthLayout } from "@/components/auth-layout";
+import { AuthLayout } from "@/components/layout/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
 import { apiPost } from "@/lib/api";
 import { ApiError } from "@/lib/errors";

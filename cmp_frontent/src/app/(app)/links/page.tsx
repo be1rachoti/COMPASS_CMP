@@ -13,15 +13,15 @@ import { Ban, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   FilterBar,
   FilterSelect,
   ResourceList,
   useCursorStack,
   useFilterParam,
-} from "@/components/resource-list";
-import { AgentForm } from "@/components/forms/project-forms";
+} from "@/components/data-display/resource-list";
+import { AgentForm } from "@/features/projects/components/forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyLink } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";

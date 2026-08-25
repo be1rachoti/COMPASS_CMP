@@ -15,7 +15,7 @@
 import { AlertTriangle, Trash2 } from "lucide-react";
 import * as React from "react";
 
-import { FormError, useApiForm } from "@/components/forms/form";
+import { FormError, useApiForm } from "@/components/forms";
 import { DialogFooter } from "@/components/ui/dialog";
 import {
   Alert,

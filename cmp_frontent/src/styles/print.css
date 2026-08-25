@@ -1,0 +1,14 @@
+/* ===========================================================================
+   Print
+
+   Consent records and notices get printed and filed, and a filed copy is
+   evidence. Backgrounds go, link targets become visible, and anything marked
+   `.no-print` - navigation, buttons, the things that only make sense on a
+   screen - does not reach the paper.
+   =========================================================================== */
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; color: #000; font-size: 11pt; }
+  a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 9pt; }
+}

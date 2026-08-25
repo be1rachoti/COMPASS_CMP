@@ -15,14 +15,14 @@ import { AlertTriangle, Upload } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   FilterBar,
   FilterSelect,
   ResourceList,
   useCursorStack,
-} from "@/components/resource-list";
-import { ImportForm } from "@/components/forms/exchange-forms";
+} from "@/components/data-display/resource-list";
+import { ImportForm } from "@/features/exchange/components/forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";

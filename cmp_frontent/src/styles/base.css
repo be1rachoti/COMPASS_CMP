@@ -1,0 +1,83 @@
+/* ===========================================================================
+   Base
+
+   Element defaults, focus rings, scrollbars, selection. Everything a page gets
+   without asking for it.
+   =========================================================================== */
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-padding-top: 5rem; /* anchors land below the sticky header */
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* One visible focus ring everywhere, and only for keyboard users. Removing
+     the outline without replacing it makes the product unusable without a
+     mouse, which is the most common accessibility failure there is. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: -0.014em;
+    color: var(--text);
+    text-wrap: balance;
+  }
+  h1 { letter-spacing: -0.02em; }
+
+  p { text-wrap: pretty; }
+
+  /* Tabular figures so numbers in a column line up on their decimal point. */
+  table, .tabular { font-variant-numeric: tabular-nums; }
+
+  ::selection {
+    background: var(--accent-subtle);
+    color: var(--accent-text);
+  }
+
+  /* Scrollbars that belong to the palette rather than the operating system. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--text-subtle); background-clip: content-box; }
+
+  /* Respect the operating-system preference. An animation that cannot be
+     turned off is a barrier for people who get motion sickness from it. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

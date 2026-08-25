@@ -13,15 +13,15 @@
 import { Ban, Pencil, Plus } from "lucide-react";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   FilterBar,
   FilterSelect,
   ResourceList,
   SearchBox,
   useCursorStack,
-} from "@/components/resource-list";
-import { ProcessorForm } from "@/components/forms/registry-forms";
+} from "@/components/data-display/resource-list";
+import { ProcessorForm } from "@/features/registry/components/forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Button, Td, Tr } from "@/components/ui/primitives";

@@ -15,15 +15,15 @@
 import { KeyRound, Pencil, Plus, ShieldEllipsis, UserCheck, UserX } from "lucide-react";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   FilterBar,
   FilterSelect,
   ResourceList,
   SearchBox,
   useCursorStack,
-} from "@/components/resource-list";
-import { RoleChangeForm, UserForm } from "@/components/forms/user-forms";
+} from "@/components/data-display/resource-list";
+import { RoleChangeForm, UserForm } from "@/features/users/components/forms";
 import { ConfirmDialog, Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";

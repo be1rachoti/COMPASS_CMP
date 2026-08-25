@@ -12,8 +12,8 @@
 import { ChevronRight } from "lucide-react";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
-import { AuditDetailDialog, EntityRef, eventSentence } from "@/components/audit-detail";
+import { PageHeader } from "@/components/layout/app-shell";
+import { AuditDetailDialog, EntityRef, eventSentence } from "@/components/data-display/audit-detail";
 import { EmptyQueue } from "@/components/ui/graphics";
 import {
   Alert,

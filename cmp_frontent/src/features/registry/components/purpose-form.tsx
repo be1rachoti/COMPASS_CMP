@@ -21,7 +21,7 @@
 import * as React from "react";
 import { z } from "zod";
 
-import { CheckboxGroup, FormError, useApiForm } from "@/components/forms/form";
+import { CheckboxGroup, FormError, useApiForm } from "@/components/forms";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { DialogFooter } from "@/components/ui/dialog";
 import { useDataCategories, useEnums } from "@/features/meta";

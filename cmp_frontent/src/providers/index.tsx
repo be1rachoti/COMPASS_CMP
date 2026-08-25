@@ -17,7 +17,7 @@ import { AuthProvider } from "./auth-provider";
 import { QueryProvider } from "./query-provider";
 import { ThemeProvider } from "./theme-provider";
 import { ToastProvider } from "./toast-provider";
-import { AppErrorBoundary } from "@/components/error-boundary";
+import { AppErrorBoundary } from "@/components/feedback/error-boundary";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (

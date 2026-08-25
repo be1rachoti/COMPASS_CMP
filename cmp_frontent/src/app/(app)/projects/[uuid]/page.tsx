@@ -27,16 +27,16 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
-import { TransitionControls } from "@/components/project/transition-controls";
+import { PageHeader } from "@/components/layout/app-shell";
+import { TransitionControls } from "@/features/projects/components/transition-controls";
 import {
   AgentForm,
   ApprovalForm,
   ProjectForm,
   SiteForm,
-} from "@/components/forms/project-forms";
-import { ExportForm } from "@/components/forms/exchange-forms";
-import { NoticeCopyForm, NoticeForm } from "@/components/forms/notice-forms";
+} from "@/features/projects/components/forms";
+import { ExportForm } from "@/features/exchange/components/forms";
+import { NoticeCopyForm, NoticeForm } from "@/features/notices/components/forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Alert,

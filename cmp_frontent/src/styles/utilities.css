@@ -1,0 +1,201 @@
+/* ===========================================================================
+   Utilities
+
+   The named patterns that recur across screens - the brand gradient, the card
+   surfaces, the skip link, the shimmer. Each one is here rather than inline
+   because it appears in more than one place and has to look identical in all
+   of them.
+   =========================================================================== */
+
+@layer utilities {
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Skip link: the first tab stop on every page. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    left: 0.5rem; top: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-pop);
+  }
+
+  /* --- Brand surfaces -------------------------------------------------- */
+
+  /* The one gradient in the product. Two neighbouring hues so it reads as a
+     single material catching light, never as a rainbow. */
+  .brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      var(--grad-from) 0%,
+      var(--grad-via) 52%,
+      var(--grad-to) 100%
+    );
+  }
+
+  .brand-text {
+    background-image: linear-gradient(120deg, var(--grad-from), var(--grad-via));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Frosted panel over the gradient. Falls back to a solid tint where
+     backdrop-filter is unsupported, so nothing becomes unreadable. */
+  .glass {
+    background-color: color-mix(in oklab, var(--surface) 72%, transparent);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass { background-color: var(--surface); }
+  }
+
+  /* A hairline that fades at both ends - used under sticky headers, where a
+     full-width rule reads as heavier than it is. */
+  .rule-fade {
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--border) 12%,
+      var(--border) 88%,
+      transparent
+    );
+  }
+
+  /* Grid texture for empty hero areas. Two 1px lines at low alpha, masked to
+     fade outward so it never competes with content. */
+  .grid-texture {
+    background-image:
+      linear-gradient(var(--viz-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--viz-grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
+    opacity: 0.5;
+  }
+
+  /* Soft coloured light behind a hero element. Purely decorative, so it is
+     hidden from assistive tech wherever it is used. */
+  .aurora::before {
+    content: "";
+    position: absolute;
+    inset: -40% -20% auto -20%;
+    height: 70%;
+    background:
+      radial-gradient(40% 60% at 25% 40%, oklch(60% 0.16 278 / 0.20), transparent 70%),
+      radial-gradient(45% 55% at 75% 30%, oklch(58% 0.15 200 / 0.16), transparent 70%);
+    filter: blur(28px);
+    pointer-events: none;
+  }
+
+  /* --- Motion ----------------------------------------------------------- */
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--bg-inset) 0%,
+      var(--bg-subtle) 50%,
+      var(--bg-inset) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  .animate-in {
+    animation: fade-rise 220ms var(--ease-out-quint) both;
+  }
+  @keyframes fade-rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* A toast arrives from the edge it lives on. */
+  @keyframes slide-in-right {
+    from { opacity: 0; transform: translateX(14px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+  }
+  .toast-in { animation: slide-in-right 260ms var(--ease-out-quint) both; }
+
+  /* Dialogs scale up from just under full size. The keyframe carries the
+     centring translate because an animated `transform` replaces the utility
+     classes wholesale - ending anywhere else would jump the panel. */
+  @keyframes dialog-pop {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  .dialog-in { animation: dialog-pop 200ms var(--ease-out-quint) both; }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .overlay-in { animation: fade-in 180ms ease-out both; }
+
+  /* Staggered reveal for a list or a KPI row. Capped at eight: past that the
+     last item waits long enough to feel broken rather than deliberate. */
+  .stagger > * { animation: fade-rise 240ms var(--ease-out-quint) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 40ms; }
+  .stagger > *:nth-child(3) { animation-delay: 80ms; }
+  .stagger > *:nth-child(4) { animation-delay: 120ms; }
+  .stagger > *:nth-child(5) { animation-delay: 160ms; }
+  .stagger > *:nth-child(6) { animation-delay: 200ms; }
+  .stagger > *:nth-child(n + 7) { animation-delay: 240ms; }
+
+  /* Bars and rings grow from nothing on first paint, so the eye follows the
+     magnitude rather than being handed it. */
+  @keyframes grow-x {
+    from { transform: scaleX(0); }
+    to   { transform: none; }
+  }
+  .grow-x {
+    transform-origin: left center;
+    animation: grow-x 520ms var(--ease-out-quint) both;
+  }
+
+  /* Card lift. Transform only - animating box-shadow alone forces a repaint
+     on every frame. */
+  .lift {
+    transition:
+      transform 180ms var(--ease-out-quint),
+      box-shadow 180ms var(--ease-out-quint),
+      border-color 180ms var(--ease-out-quint);
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
+  }
+
+  /* A scroll container that says so: the shadow appears only when there is
+     more to scroll to, so a wide table never silently hides a column. */
+  .scroll-x {
+    overflow-x: auto;
+    background:
+      linear-gradient(to right, var(--surface) 30%, transparent),
+      linear-gradient(to right, transparent, var(--surface) 70%) 100% 0,
+      radial-gradient(farthest-side at 0 50%, oklch(0% 0 0 / 0.09), transparent),
+      radial-gradient(farthest-side at 100% 50%, oklch(0% 0 0 / 0.09), transparent) 100% 0;
+    background-repeat: no-repeat;
+    background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+}

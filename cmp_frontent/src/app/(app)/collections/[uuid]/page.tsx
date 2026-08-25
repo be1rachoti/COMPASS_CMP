@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import { Meter, StatTile } from "@/components/ui/charts";
 import { EmptyRecords } from "@/components/ui/graphics";
 import {

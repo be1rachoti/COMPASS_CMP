@@ -17,8 +17,8 @@ import {
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
-import { ResourceList, useCursorStack } from "@/components/resource-list";
+import { PageHeader } from "@/components/layout/app-shell";
+import { ResourceList, useCursorStack } from "@/components/data-display/resource-list";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Td, Tr } from "@/components/ui/primitives";
 import { useAllCollections } from "@/features/exchange";

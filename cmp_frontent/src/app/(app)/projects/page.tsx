@@ -12,8 +12,8 @@ import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
-import { useFilterParam } from "@/components/resource-list";
+import { PageHeader } from "@/components/layout/app-shell";
+import { useFilterParam } from "@/components/data-display/resource-list";
 import { EmptyProjects } from "@/components/ui/graphics";
 import {
   Alert,
@@ -28,7 +28,7 @@ import {
   Th,
   Tr,
 } from "@/components/ui/primitives";
-import { ProjectForm } from "@/components/forms/project-forms";
+import { ProjectForm } from "@/features/projects/components/forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status";
 import { useEnums } from "@/features/meta";

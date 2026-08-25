@@ -15,8 +15,8 @@ import {
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
-import { ResourceList, useCursorStack } from "@/components/resource-list";
+import { PageHeader } from "@/components/layout/app-shell";
+import { ResourceList, useCursorStack } from "@/components/data-display/resource-list";
 import { EmptyQueue } from "@/components/ui/graphics";
 import { Badge, Button, Mono, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";

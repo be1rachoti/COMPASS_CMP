@@ -26,12 +26,12 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   LanguageForm,
   NoticeForm,
   NoticePurposesForm,
-} from "@/components/forms/notice-forms";
+} from "@/features/notices/components/forms";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Alert,

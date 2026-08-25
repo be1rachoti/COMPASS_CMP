@@ -17,7 +17,7 @@ import { CheckCircle2, Pencil, Plus, XCircle } from "lucide-react";
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   FilterBar,
   FilterSelect,
@@ -25,8 +25,8 @@ import {
   SearchBox,
   useCursorStack,
   useFilterParam,
-} from "@/components/resource-list";
-import { PurposeForm } from "@/components/forms/purpose-form";
+} from "@/components/data-display/resource-list";
+import { PurposeForm } from "@/features/registry/components/purpose-form";
 import { ConfirmDialog, Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Badge, Button, Td, Tr } from "@/components/ui/primitives";

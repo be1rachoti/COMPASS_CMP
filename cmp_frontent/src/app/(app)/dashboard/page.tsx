@@ -33,7 +33,7 @@ import {
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import { BarList, StackedBar, StatTile, type Segment } from "@/components/ui/charts";
 import { EmptyQueue, EmptyRecords } from "@/components/ui/graphics";
 import {

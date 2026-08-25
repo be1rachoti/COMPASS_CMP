@@ -7,7 +7,8 @@
  */
 "use client";
 
-import { AppShell } from "@/components/app-shell";
+import { AppShell } from "@/components/layout/app-shell";
+import { SessionWarning } from "@/components/security";
 import { Skeleton } from "@/components/ui/primitives";
 import { RequireAuth } from "@/providers";
 
@@ -15,6 +16,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth fallback={<ShellSkeleton />}>
       <AppShell>{children}</AppShell>
+      {/* Outside the shell so it survives a page-level error boundary: a
+          session about to end is exactly when somebody needs to be told. */}
+      <SessionWarning />
     </RequireAuth>
   );
 }

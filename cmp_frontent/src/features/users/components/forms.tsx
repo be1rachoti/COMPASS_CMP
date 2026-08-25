@@ -20,7 +20,7 @@
 
 import * as React from "react";
 
-import { FormError, useApiForm } from "@/components/forms/form";
+import { FormError, useApiForm } from "@/components/forms";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { useChangeRole, useCreateUser, useUpdateUser } from "@/features/users";

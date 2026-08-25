@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 
 import { Providers } from "@/providers";
 import { config } from "@/lib/config";
@@ -32,9 +33,16 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Minted per request by the middleware. The theme script below is the one
+  // piece of inline JavaScript this application ships, and the nonce is what
+  // lets the CSP forbid every other one. Reading headers() also opts this
+  // layout out of static rendering, which is correct: a nonce baked into a
+  // cached page is a nonce an attacker knows.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -42,6 +50,7 @@ export default function RootLayout({
             user gets a white flash on every navigation. Inline and synchronous
             on purpose - a deferred script is too late to prevent the flash. */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `
 (function () {

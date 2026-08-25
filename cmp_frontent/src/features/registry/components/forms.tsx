@@ -15,7 +15,7 @@
 
 import * as React from "react";
 
-import { CheckboxGroup, FormError, useApiForm } from "@/components/forms/form";
+import { CheckboxGroup, FormError, useApiForm } from "@/components/forms";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Button, Field, Input, Select } from "@/components/ui/primitives";
 import {

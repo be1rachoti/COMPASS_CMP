@@ -17,14 +17,14 @@
 import { CheckCircle2, ShieldAlert, ShieldCheck } from "lucide-react";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
-import { AuditDetailDialog, distinctSentence, EntityRef } from "@/components/audit-detail";
+import { PageHeader } from "@/components/layout/app-shell";
+import { AuditDetailDialog, distinctSentence, EntityRef } from "@/components/data-display/audit-detail";
 import {
   FilterBar,
   FilterSelect,
   ResourceList,
   useCursorStack,
-} from "@/components/resource-list";
+} from "@/components/data-display/resource-list";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";

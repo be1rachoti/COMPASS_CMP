@@ -17,7 +17,7 @@
 import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
 import * as React from "react";
 
-import { FileInput, FormError, useApiForm } from "@/components/forms/form";
+import { FileInput, FormError, useApiForm } from "@/components/forms";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Mono, Select, Table, Td, Th, Tr } from "@/components/ui/primitives";
 import { useCreateExport, useSubmitImport, useValidateImport } from "@/features/exchange";

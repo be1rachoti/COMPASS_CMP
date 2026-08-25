@@ -12,13 +12,13 @@
 import Link from "next/link";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   FilterBar,
   FilterSelect,
   ResourceList,
   useCursorStack,
-} from "@/components/resource-list";
+} from "@/components/data-display/resource-list";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";

@@ -11,7 +11,7 @@
 import { LogOut, Monitor, UserRound } from "lucide-react";
 import * as React from "react";
 
-import { PageHeader } from "@/components/app-shell";
+import { PageHeader } from "@/components/layout/app-shell";
 import {
   Alert,
   Button,
