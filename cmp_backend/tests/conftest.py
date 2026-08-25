@@ -63,6 +63,33 @@ async def redis_client() -> AsyncIterator[Any]:
 
 
 @pytest.fixture
+async def redis_conn() -> AsyncIterator[Any]:
+    """A Redis connection opened and closed within this test's event loop.
+
+    Function-scoped, unlike `redis_client`, and that is not a preference. Under
+    `asyncio_mode = "auto"` pytest-asyncio gives each test its own event loop; a
+    redis-py connection is bound to the loop it was created on, so a
+    session-scoped client is unusable from the second test onwards and closes
+    against a loop that has already gone — surfacing as "Event loop is closed"
+    from a teardown far from the cause.
+
+    The connection pool tolerates this because psycopg opens its connections
+    lazily per use. Redis does not, so anything touching it gets this instead.
+
+    Keys are namespaced by the test's own identifiers rather than flushed: a
+    FLUSHDB here would wipe the sessions of anybody running the app against the
+    same Redis, which on a developer machine is exactly what is happening.
+    """
+    from cmp.db.redis import close_redis, open_redis
+
+    client = await open_redis()
+    try:
+        yield client
+    finally:
+        await close_redis()
+
+
+@pytest.fixture
 async def conn(db_pool: Any) -> AsyncIterator[Any]:
     """A connection whose transaction is always rolled back.
 
