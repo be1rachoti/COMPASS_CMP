@@ -1,0 +1,192 @@
+name: cmp
+
+# Local and CI runtime. Production runs the same images through an orchestrator;
+# what differs is replica count, secrets source and the proxy in front.
+#
+#   docker compose up -d db redis        # infrastructure only, for `uv run` dev
+#   docker compose up -d                 # the whole stack behind nginx
+#   docker compose run --rm api alembic upgrade head
+
+x-api-env: &api-env
+  ENVIRONMENT: ${ENVIRONMENT:-local}
+  POSTGRES_HOST: db
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: ${POSTGRES_DB:-cmp}
+  POSTGRES_USER: ${POSTGRES_USER:-cmp}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cmp}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CELERY_RESULT_BACKEND: redis://redis:6379/2
+  SECRET_KEY: ${SECRET_KEY:-dev-only-change-me-dev-only-change-me-32}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  LOG_JSON: ${LOG_JSON:-true}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+x-healthy: &healthy
+  condition: service_healthy
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cmp}
+      POSTGRES_USER: ${POSTGRES_USER:-cmp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cmp}
+      # Deterministic collation: an index built under a different collation
+      # sorts differently, and a keyset cursor then skips rows.
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    command:
+      - postgres
+      - -c
+      - log_min_duration_statement=500   # surface slow queries in dev, not just prod
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - max_connections=100
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cmp} -d ${POSTGRES_DB:-cmp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      # Sessions, OTP and rate-limit counters all carry a TTL. allkeys-lru would
+      # evict a live session under memory pressure and silently sign people out;
+      # volatile-lru only touches keys that were already expiring.
+      - --maxmemory-policy
+      - volatile-lru
+    volumes:
+      - redisdata:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: runtime
+    environment: *api-env
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: *healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: runtime
+    environment: *api-env
+    depends_on:
+      db: *healthy
+      redis: *healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - uploads:/app/var/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: runtime
+    environment: *api-env
+    # Dedicated queues so a slow report cannot delay an OTP email.
+    command:
+      - celery
+      - -A
+      - cmp.tasks.app:celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=4
+      - --max-tasks-per-child=200
+      - --queues=high_priority,email,documents,reports,notifications,default
+    depends_on:
+      db: *healthy
+      redis: *healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - uploads:/app/var/uploads
+    healthcheck:
+      test: ["CMD", "celery", "-A", "cmp.tasks.app:celery_app", "inspect", "ping", "-d", "celery@$$HOSTNAME"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: .
+      target: runtime
+    environment: *api-env
+    # Exactly one Beat. Two schedulers produce duplicate scheduled work, and a
+    # retention sweep that runs twice is a sweep that races itself.
+    command:
+      - celery
+      - -A
+      - cmp.tasks.app:celery_app
+      - beat
+      - --loglevel=info
+      - --schedule=/app/var/celerybeat-schedule
+    depends_on:
+      redis: *healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - beatdata:/app/var
+    deploy:
+      replicas: 1
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      api: *healthy
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+    restart: unless-stopped
+    profiles: ["proxy"]
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+  beatdata:

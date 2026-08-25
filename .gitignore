@@ -1,0 +1,56 @@
+# Root ignores for the COMPASS_CMP monorepo.
+#
+# Each project also carries its own .gitignore; this is the belt-and-braces
+# layer, and the one place a reviewer can check that nothing secret can be
+# committed by accident from anywhere in the tree.
+
+# ---------------------------------------------------------------- secrets
+# Never committed, from any directory. `.env.example` is the documented
+# template and is deliberately excepted.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/migrations/**/*.key
+
+# ------------------------------------------------------- source documents
+# The authoring specifications (API reference, data model, architecture
+# diagrams) are the client's own documents, not source. Kept out of the
+# published repository unless somebody decides otherwise.
+projects_docs/
+
+# ---------------------------------------------------------- dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# ------------------------------------------------------------- artefacts
+.next/
+out/
+build/
+dist/
+*.egg-info/
+var/
+uploads/
+*.log
+
+# ------------------------------------------------------------ tool state
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# ------------------------------------------------------------------- ide
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
