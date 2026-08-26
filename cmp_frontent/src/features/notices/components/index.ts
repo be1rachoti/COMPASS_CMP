@@ -10,3 +10,7 @@ export { NoticeForm } from "@/features/notices/components/notice-form";
 export { NoticePurposesForm } from "@/features/notices/components/notice-purposes-form";
 export { LanguageForm } from "@/features/notices/components/language-form";
 export { NoticeCopyForm } from "@/features/notices/components/notice-copy-form";
+export {
+  Rule3Badge,
+  Rule3OverrideDialog,
+} from "@/features/notices/components/rule3-override";

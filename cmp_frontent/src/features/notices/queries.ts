@@ -21,7 +21,7 @@ import type {
   NoticeLanguage,
   NoticeListRow,
   Page,
-  Purpose,
+  PurposeOnNotice,
   Uuid,
 } from "@/types";
 
@@ -65,7 +65,7 @@ export function useNoticeChecklist(uuid: Uuid | undefined) {
 }
 
 export function useNoticePurposes(uuid: Uuid | undefined) {
-  return useQuery<Purpose[], ApiError>({
+  return useQuery<PurposeOnNotice[], ApiError>({
     queryKey: keys.notice.purposes(uuid ?? ""),
     queryFn: () => listNoticePurposes(uuid!),
     enabled: Boolean(uuid),

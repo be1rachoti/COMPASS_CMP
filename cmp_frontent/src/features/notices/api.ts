@@ -17,7 +17,7 @@ import type {
   NoticeLanguage,
   NoticeListRow,
   Page,
-  Purpose,
+  PurposeOnNotice,
   Uuid,
 } from "@/types";
 
@@ -47,8 +47,8 @@ export function getNoticeChecklist(uuid: Uuid): Promise<NoticeChecklist> {
   return apiGet<NoticeChecklist>(`/notices/${uuid}/checklist`);
 }
 
-export function listNoticePurposes(uuid: Uuid): Promise<Purpose[]> {
-  return apiGet<Purpose[]>(`/notices/${uuid}/purposes`);
+export function listNoticePurposes(uuid: Uuid): Promise<PurposeOnNotice[]> {
+  return apiGet<PurposeOnNotice[]>(`/notices/${uuid}/purposes`);
 }
 
 export function listNoticeLanguages(uuid: Uuid): Promise<NoticeLanguage[]> {

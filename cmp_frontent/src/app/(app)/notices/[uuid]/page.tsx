@@ -20,6 +20,7 @@ import {
   Lock,
   Pencil,
   Plus,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -58,6 +59,11 @@ import { useApproveLanguage } from "@/features/notices";
 import type { LanguageCode } from "@/types";
 import { formatDateTime, formatDuration, humanise, shortHash } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
+import {
+  Rule3Badge,
+  Rule3OverrideDialog,
+} from "@/features/notices/components/rule3-override";
+import type { PurposeOnNotice } from "@/types";
 
 export default function NoticeDetailPage() {
   const { uuid } = useParams<{ uuid: string }>();
@@ -67,6 +73,7 @@ export default function NoticeDetailPage() {
   const notice = useNotice(uuid);
   const checklist = useNoticeChecklist(uuid);
   const purposes = useNoticePurposes(uuid);
+  const [narrowing, setNarrowing] = React.useState<PurposeOnNotice | null>(null);
   const languages = useNoticeLanguages(uuid);
   const publish = usePublishNotice(uuid);
   const approve = useApproveLanguage(uuid);
@@ -268,13 +275,28 @@ export default function NoticeDetailPage() {
                           {purpose.description}
                         </p>
                       </div>
-                      <div className="flex shrink-0 gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {purpose.is_mandatory && (
                           <span className="rounded-full border border-warning-border bg-warning-subtle px-2 py-0.5 text-2xs font-medium text-warning-text">
                             cannot be refused
                           </span>
                         )}
+                        <Rule3Badge purpose={purpose} />
                         <StatusBadge kind="purpose" value={purpose.status} dot={false} />
+                        {/* Draft only. A published notice is frozen and hashed;
+                            changing what it says is a new version, not an edit,
+                            and the API refuses it either way. */}
+                        {isDpo && isDraft && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setNarrowing(purpose)}
+                            title="State Rule 3(b) more narrowly on this notice"
+                          >
+                            <SlidersHorizontal className="size-4" />
+                            Narrow
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -295,6 +317,15 @@ export default function NoticeDetailPage() {
                         <dt className="inline font-medium">Categories: </dt>
                         <dd className="inline">
                           {purpose.data_categories.map(humanise).join(", ")}
+                          {/* Named where they differ, because otherwise a
+                              reviewer comparing this against the purpose
+                              register would find two lists and no explanation. */}
+                          {purpose.is_overridden && (
+                            <span className="text-accent-text">
+                              {" "}
+                              (this notice only)
+                            </span>
+                          )}
                         </dd>
                       </div>
                     </dl>
@@ -516,6 +547,11 @@ export default function NoticeDetailPage() {
           )}
         </DialogContent>
       </Dialog>
+      <Rule3OverrideDialog
+        noticeUuid={uuid}
+        purpose={narrowing}
+        onClose={() => setNarrowing(null)}
+      />
     </>
   );
 }
