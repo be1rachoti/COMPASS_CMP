@@ -22,7 +22,7 @@ import {
   ResourceList,
   useCursorStack,
 } from "@/components/data-display/resource-list";
-import { ImportForm } from "@/features/exchange/components/forms";
+import { ImportWizard } from "@/features/exchange/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Alert, Button, Td, Tr } from "@/components/ui/primitives";
@@ -145,7 +145,7 @@ export default function ImportsPage() {
           description="Validate first. The dry run parses and checks everything without writing a row."
           size="lg"
         >
-          <ImportForm onDone={() => setImporting(false)} />
+          <ImportWizard onDone={() => setImporting(false)} />
         </DialogContent>
       </Dialog>
     </>

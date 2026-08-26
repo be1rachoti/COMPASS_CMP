@@ -1,248 +1,26 @@
 /**
- * Import wizard and export generation.
+ * Export generation.
  *
- * The import flow is two steps and refuses to collapse into one. `POST
- * /imports/validate` is a dry run — same parsing, same checks, nothing written —
- * and the submit button stays disabled until it has passed. A manifest arriving
- * from a third-party tool is the input you trust least, and finding out about a
- * malformed row after a partial write is much worse than finding out before.
+ * Warns before it runs, because generating writes a disclosure record: one
+ * `export_line` per subject in the file. That is what makes s.11(1)(b)
+ * answerable, and it is also why re-generating to get a fresh copy is the wrong
+ * move — downloading again is free and repeatable.
  *
- * Export generation warns before it runs, because generating writes a disclosure
- * record: one `export_line` per subject in the file. That is what makes
- * s.11(1)(b) answerable, and it is also why re-generating to get a fresh copy is
- * the wrong move — downloading again is free and repeatable.
+ * The import flow lives in `import-wizard.tsx`.
  */
 "use client";
 
-import { AlertTriangle, CheckCircle2, FileWarning } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import * as React from "react";
 
-import { FileInput, FormError, useApiForm } from "@/components/forms";
+import { FormError, useApiForm } from "@/components/forms";
 import { DialogFooter } from "@/components/ui/dialog";
-import { Alert, Button, Field, Mono, Select, Table, Td, Th, Tr } from "@/components/ui/primitives";
-import { useCreateExport, useSubmitImport, useValidateImport } from "@/features/exchange";
-import { useProjects, useSites } from "@/features/projects";
-import { useSources } from "@/features/registry";
-import type { DataSource, ImportValidation, Page } from "@/types";
+import { Alert, Button, Field, Select } from "@/components/ui/primitives";
+import { useCreateExport } from "@/features/exchange";
+import { useSites } from "@/features/projects";
+
 import { useToast } from "@/providers";
 import { exportSchema } from "@/features/exchange/schemas";
-
-const MAX_MANIFEST_BYTES = 25 * 1024 * 1024;
-
-/* ==================================================================== import */
-
-export function ImportForm({ onDone }: { onDone: () => void }) {
-  const toast = useToast();
-  const validate = useValidateImport();
-  const submit = useSubmitImport();
-
-  const sources = useSources({ status: "active", limit: 100 }) as unknown as {
-    data?: Page<DataSource>;
-  };
-  const { data: projects } = useProjects({ status: "approved", limit: 100 });
-
-  const [source, setSource] = React.useState("");
-  const [project, setProject] = React.useState("");
-  const [file, setFile] = React.useState<File | null>(null);
-  const [result, setResult] = React.useState<ImportValidation | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  // Any change to the inputs invalidates the dry run: it validated a different
-  // file, and letting the submit button stay enabled would submit unchecked data.
-  function reset<T>(setter: (v: T) => void) {
-    return (value: T) => {
-      setter(value);
-      setResult(null);
-      setError(null);
-    };
-  }
-
-  function message(err: unknown, fallback: string): string {
-    return err && typeof err === "object" && "userMessage" in err
-      ? (err as { userMessage: () => string }).userMessage()
-      : fallback;
-  }
-
-  async function runValidation() {
-    if (!source || !file) {
-      setError("Choose a source and a manifest first.");
-      return;
-    }
-    setError(null);
-    try {
-      const outcome = await validate.mutateAsync({
-        source,
-        project: project || undefined,
-        manifest: file,
-      });
-      setResult(outcome);
-      if (outcome.valid) {
-        toast.success("Manifest is valid", `${outcome.declared_rows} row(s) ready to import.`);
-      }
-    } catch (err) {
-      setError(message(err, "The manifest could not be validated."));
-    }
-  }
-
-  async function runImport() {
-    if (!source || !project || !file) return;
-    try {
-      const outcome = await submit.mutateAsync({ source, project, manifest: file });
-      if (outcome.accepted_rows === 0 && outcome.rejected_rows === 0) {
-        // Idempotent replay: same bytes, same source, already accepted.
-        toast.info("Nothing to do", "This file has already been imported. Nothing was written.");
-      } else {
-        toast.success(
-          `Import ${outcome.status}`,
-          `${outcome.accepted_rows} accepted, ${outcome.rejected_rows} rejected.`,
-        );
-      }
-      onDone();
-    } catch (err) {
-      setError(message(err, "The import failed."));
-    }
-  }
-
-  return (
-    <div>
-      <FormError message={error} />
-
-      <div className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Data source" hint="Where this manifest came from." required>
-            {(p) => (
-              <Select {...p} value={source} onChange={(e) => reset(setSource)(e.target.value)}>
-                <option value="">Choose a source…</option>
-                {sources.data?.items.map((s) => (
-                  <option key={s.source_uuid} value={s.source_uuid}>
-                    {s.name} · {s.source_code}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-
-          <Field label="Project" hint="Only approved projects can receive a collection." required>
-            {(p) => (
-              <Select {...p} value={project} onChange={(e) => reset(setProject)(e.target.value)}>
-                <option value="">Choose a project…</option>
-                {projects?.items.map((pr) => (
-                  <option key={pr.project_uuid} value={pr.project_uuid}>
-                    {pr.project_name}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </div>
-
-        <FileInput
-          label="Manifest"
-          hint="CSV, up to 25 MB. Required columns: source_collection_ref, source_asset_ref, asset_type, collected_on, subject_role."
-          accept=".csv,text/csv,application/json"
-          maxBytes={MAX_MANIFEST_BYTES}
-          file={file}
-          onChange={reset(setFile)}
-          required
-        />
-
-        <Button
-          variant="secondary"
-          loading={validate.isPending}
-          disabled={!source || !file}
-          onClick={runValidation}
-        >
-          Validate — dry run, writes nothing
-        </Button>
-
-        {result && <ValidationReport result={result} />}
-      </div>
-
-      <DialogFooter>
-        <Button variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          loading={submit.isPending}
-          // Deliberately gated on a passing dry run. A manifest nobody has
-          // checked is exactly the input that should not reach the database.
-          disabled={!result?.valid || !project}
-          onClick={runImport}
-        >
-          Import {result?.valid ? `${result.declared_rows} row(s)` : ""}
-        </Button>
-      </DialogFooter>
-    </div>
-  );
-}
-
-function ValidationReport({ result }: { result: ImportValidation }) {
-  if (result.already_imported) {
-    return (
-      <Alert tone="info" title="Already imported">
-        <p>
-          This exact file has been imported before (batch {result.previous_batch_uuid}).
-          Importing is idempotent, so submitting it again accepts nothing and
-          reports zero rather than duplicating anything.
-        </p>
-      </Alert>
-    );
-  }
-
-  if (result.valid) {
-    return (
-      <Alert tone="success" title="Manifest is valid">
-        <p className="flex items-start gap-2">
-          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            {result.declared_rows} row(s) parsed with no errors. Nothing has been
-            written yet.
-          </span>
-        </p>
-        <p className="mt-2 text-xs">
-          File SHA-256 <Mono>{result.file_sha256.slice(0, 16)}…</Mono>
-        </p>
-      </Alert>
-    );
-  }
-
-  return (
-    <div>
-      <Alert tone="danger" title={`${result.error_count} problem(s) found`}>
-        <p className="flex items-start gap-2">
-          <FileWarning className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <span>
-            Nothing has been written. Fix the manifest and validate again — this is
-            exactly what the dry run is for.
-          </span>
-        </p>
-      </Alert>
-
-      <div className="mt-3 max-h-64 overflow-y-auto">
-        <Table>
-          <caption className="sr-only">Validation errors, first 200</caption>
-          <thead>
-            <tr>
-              <Th>Row</Th>
-              <Th>Field</Th>
-              <Th>Problem</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.errors.map((e, i) => (
-              <Tr key={`${e.row}-${e.field}-${i}`}>
-                <Td className="tabular">{e.row === 0 ? "file" : e.row}</Td>
-                <Td className="font-mono text-xs">{e.field}</Td>
-                <Td className="text-text-muted">{e.error}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
-    </div>
-  );
-}
 
 /* ==================================================================== export */
 
