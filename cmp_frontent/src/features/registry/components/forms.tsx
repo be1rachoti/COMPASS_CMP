@@ -68,7 +68,7 @@ export function ProcessorForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={form.formError} />
 
       <div className="space-y-4">
@@ -174,7 +174,7 @@ export function SourceForm({ source, onDone }: { source?: DataSource; onDone: ()
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={form.formError} />
 
       <div className="space-y-4">

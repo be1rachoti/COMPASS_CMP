@@ -104,7 +104,7 @@ export function SearchBox({
   const [term, setTerm] = React.useState("");
 
   return (
-    <form
+    <form method="post"
       className="flex items-end gap-2"
       onSubmit={(e) => {
         e.preventDefault();

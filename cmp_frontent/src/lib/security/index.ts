@@ -8,3 +8,4 @@
 
 export * from "@/lib/security/sanitize";
 export * from "@/lib/security/session-timeout";
+export { useHydrated } from "@/lib/security/use-hydrated";

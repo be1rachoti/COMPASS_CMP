@@ -37,6 +37,7 @@ import {
   type ResetRequestValues,
 } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
+import { useHydrated } from "@/lib/security";
 
 export default function ResetPage() {
   const [sentTo, setSentTo] = React.useState<string | null>(null);
@@ -69,6 +70,7 @@ export default function ResetPage() {
 }
 
 function RequestStep({ onSent }: { onSent: (email: string) => void }) {
+  const hydrated = useHydrated();
   const [error, setError] = React.useState<string | null>(null);
 
   const form = useForm<ResetRequestValues>({
@@ -95,7 +97,7 @@ function RequestStep({ onSent }: { onSent: (email: string) => void }) {
   });
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form method="post" onSubmit={submit} className="space-y-4" noValidate>
       {error && <Alert tone="danger">{error}</Alert>}
 
       <Field
@@ -121,6 +123,7 @@ function RequestStep({ onSent }: { onSent: (email: string) => void }) {
         variant="primary"
         className="w-full"
         loading={form.formState.isSubmitting}
+        disabled={!hydrated}
       >
         Send the code
       </Button>
@@ -130,6 +133,7 @@ function RequestStep({ onSent }: { onSent: (email: string) => void }) {
 
 function ConfirmStep({ email, onStartOver }: { email: string; onStartOver: () => void }) {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [error, setError] = React.useState<string | null>(null);
   const [done, setDone] = React.useState(false);
 
@@ -177,7 +181,7 @@ function ConfirmStep({ email, onStartOver }: { email: string; onStartOver: () =>
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form method="post" onSubmit={submit} className="space-y-4" noValidate>
       {error && <Alert tone="danger">{error}</Alert>}
 
       <Field label="Code" error={form.formState.errors.code?.message} required>
@@ -233,6 +237,7 @@ function ConfirmStep({ email, onStartOver }: { email: string; onStartOver: () =>
         variant="primary"
         className="w-full"
         loading={form.formState.isSubmitting}
+        disabled={!hydrated}
       >
         Set the new password
       </Button>

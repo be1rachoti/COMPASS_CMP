@@ -27,7 +27,7 @@ import { AuthLayout } from "@/components/layout/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
 import { requestOtp, signInWithPassword, verifyOtp } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
-import { safeRedirectPath } from "@/lib/security";
+import { safeRedirectPath, useHydrated } from "@/lib/security";
 import { useAuth } from "@/providers";
 
 const passwordSchema = z.object({
@@ -143,6 +143,7 @@ function StaffForm() {
   const router = useRouter();
   const params = useSearchParams();
   const { refresh } = useAuth();
+  const hydrated = useHydrated();
   const [formError, setFormError] = React.useState<string | null>(null);
 
   const form = useForm<PasswordForm>({
@@ -191,7 +192,26 @@ function StaffForm() {
   });
 
   return (
-    <form id="staff-panel" role="tabpanel" onSubmit={onSubmit} className="space-y-4" noValidate>
+    // `method="post"` is not decorative, and removing it leaks the password.
+    //
+    // React attaches `onSubmit` at hydration. Press Sign in before that lands -
+    // a cold cache, a slow connection, a chunk that 404s - and the browser does
+    // the *native* submission instead. HTML's default method is GET, so every
+    // field goes into the query string: the URL becomes
+    // `/sign-in?login=...&password=...`, and that lands in browser history, in
+    // the server's access log, and in the Referer header of the next request.
+    //
+    // With POST the unhydrated case is a POST to a page route, which fails
+    // visibly and puts nothing in the URL. Observed, not theorised: this
+    // happened on a first page load in development.
+    <form
+      method="post"
+      id="staff-panel"
+      role="tabpanel"
+      onSubmit={onSubmit}
+      className="space-y-4"
+      noValidate
+    >
       {formError && <Alert tone="danger">{formError}</Alert>}
 
       <Field label="Email or username" error={form.formState.errors.login?.message} required>
@@ -218,7 +238,16 @@ function StaffForm() {
         )}
       </Field>
 
-      <Button type="submit" variant="primary" className="w-full" loading={form.formState.isSubmitting}>
+      <Button
+        type="submit"
+        variant="primary"
+        className="w-full"
+        loading={form.formState.isSubmitting}
+        // Before React attaches its handler the browser would perform a native
+        // submission instead, and a disabled control cannot fire one. On a warm
+        // load this lasts a few milliseconds; on a cold one it is honest.
+        disabled={!hydrated}
+      >
         Sign in
       </Button>
 
@@ -235,6 +264,7 @@ function StaffForm() {
 }
 
 function SubjectForm() {
+  const hydrated = useHydrated();
   const [sent, setSent] = React.useState(false);
   const [contact, setContact] = React.useState("");
 
@@ -273,7 +303,7 @@ function SubjectForm() {
   }
 
   return (
-    <form id="subject-panel" role="tabpanel" onSubmit={onSubmit} className="space-y-4" noValidate>
+    <form method="post" id="subject-panel" role="tabpanel" onSubmit={onSubmit} className="space-y-4" noValidate>
       <Field
         label="Email or mobile"
         hint="The one you gave when you consented. We will send a one-time code."
@@ -291,7 +321,13 @@ function SubjectForm() {
         )}
       </Field>
 
-      <Button type="submit" variant="primary" className="w-full" loading={form.formState.isSubmitting}>
+      <Button
+        type="submit"
+        variant="primary"
+        className="w-full"
+        loading={form.formState.isSubmitting}
+        disabled={!hydrated}
+      >
         Send me a code
       </Button>
     </form>
@@ -301,6 +337,7 @@ function SubjectForm() {
 function SubjectVerifyForm({ contact }: { contact: string }) {
   const router = useRouter();
   const { refresh } = useAuth();
+  const hydrated = useHydrated();
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -321,7 +358,7 @@ function SubjectVerifyForm({ contact }: { contact: string }) {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
+    <form method="post" onSubmit={submit} className="space-y-4" noValidate>
       {error && <Alert tone="danger">{error}</Alert>}
       <Field label="Six-digit code" required>
         {(props) => (
@@ -337,7 +374,13 @@ function SubjectVerifyForm({ contact }: { contact: string }) {
           />
         )}
       </Field>
-      <Button type="submit" variant="primary" className="w-full" loading={busy} disabled={code.length !== 6}>
+      <Button
+        type="submit"
+        variant="primary"
+        className="w-full"
+        loading={busy}
+        disabled={!hydrated || code.length !== 6}
+      >
         Verify
       </Button>
     </form>

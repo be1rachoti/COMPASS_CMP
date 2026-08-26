@@ -14,6 +14,7 @@ import { AuthLayout } from "@/components/layout/auth-layout";
 import { Alert, Button, Field, Input } from "@/components/ui/primitives";
 import { resendMfa, verifyMfa } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
+import { useHydrated } from "@/lib/security";
 import { useAuth } from "@/providers";
 
 const CODE_LENGTH = 6;
@@ -21,6 +22,7 @@ const CODE_LENGTH = 6;
 export default function VerifyPage() {
   const router = useRouter();
   const { refresh } = useAuth();
+  const hydrated = useHydrated();
 
   const [code, setCode] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
@@ -87,7 +89,7 @@ export default function VerifyPage() {
         </p>
       }
     >
-      <form onSubmit={verify} className="space-y-4" noValidate>
+      <form method="post" onSubmit={verify} className="space-y-4" noValidate>
         {error && <Alert tone="danger">{error}</Alert>}
         {notice && <Alert tone="info">{notice}</Alert>}
 
@@ -111,7 +113,10 @@ export default function VerifyPage() {
           variant="primary"
           className="w-full"
           loading={busy}
-          disabled={code.length !== CODE_LENGTH}
+          // `!hydrated` is the important half. Before React attaches its
+          // handler the browser would perform a native submission instead, and
+          // a disabled control cannot fire one. See `useHydrated`.
+          disabled={!hydrated || code.length !== CODE_LENGTH}
         >
           Verify and continue
         </Button>

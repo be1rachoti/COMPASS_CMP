@@ -208,7 +208,7 @@ function PasswordCard() {
         </p>
       </CardHeader>
       <CardBody>
-        <form onSubmit={submit} className="max-w-sm space-y-4" noValidate>
+        <form method="post" onSubmit={submit} className="max-w-sm space-y-4" noValidate>
           {error && <Alert tone="danger">{error}</Alert>}
 
           <Field label="Current password" required>

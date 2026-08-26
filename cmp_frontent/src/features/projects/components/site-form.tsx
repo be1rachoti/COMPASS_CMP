@@ -73,7 +73,7 @@ export function SiteForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={form.formError} />
 
       {noticePublished && (

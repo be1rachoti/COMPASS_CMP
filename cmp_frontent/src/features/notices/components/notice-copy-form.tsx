@@ -62,7 +62,7 @@ export function NoticeCopyForm({
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={error} />
 
       {notices.isLoading ? (

@@ -59,7 +59,7 @@ export function VerifyStep({
         </p>
       </CardHeader>
       <CardBody>
-        <form onSubmit={submit} className="space-y-4" noValidate>
+        <form method="post" onSubmit={submit} className="space-y-4" noValidate>
           <Field label="Six-digit code" required>
             {(props) => (
               <Input

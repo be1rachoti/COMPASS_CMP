@@ -270,7 +270,7 @@ export function ExportForm({
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={form.formError} />
 
       <div className="space-y-4">

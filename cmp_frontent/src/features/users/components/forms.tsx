@@ -81,7 +81,7 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={form.formError} />
 
       {!user && (
@@ -190,7 +190,7 @@ export function RoleChangeForm({ user, onDone }: { user: User; onDone: () => voi
   });
 
   return (
-    <form onSubmit={onSubmit} noValidate>
+    <form method="post" onSubmit={onSubmit} noValidate>
       <FormError message={form.formError} />
 
       <Alert tone="warning" className="mb-4">

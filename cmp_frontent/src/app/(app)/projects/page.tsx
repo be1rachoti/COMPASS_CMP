@@ -93,7 +93,7 @@ function ProjectsPageView() {
       />
 
       <div className="mb-4 flex flex-wrap items-end gap-3">
-        <form onSubmit={onSearch} className="flex items-end gap-2">
+        <form method="post" onSubmit={onSearch} className="flex items-end gap-2">
           <div className="w-64">
             <label htmlFor="project-search" className="mb-1.5 block text-sm font-medium">
               Search
