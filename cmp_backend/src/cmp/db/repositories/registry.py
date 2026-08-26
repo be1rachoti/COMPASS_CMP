@@ -212,6 +212,7 @@ async def list_sources(
     status: str | None = None,
     source_role: str | None = None,
     processor_uuid: str | None = None,
+    unmapped: bool = False,
     q: str | None = None,
 ) -> tuple[list[Row], str | None, int]:
     where, params = ["1 = 1"], []
@@ -228,6 +229,12 @@ async def list_sources(
             "s.processor_id = (SELECT processor_id FROM processor WHERE processor_uuid = %s)"
         )
         params.append(processor_uuid)
+    if unmapped:
+        # Sources nobody has said who operates. Not an error - a source the
+        # organisation runs itself has no processor, and forcing one would mean
+        # inventing a processor record for yourself. It is a *gap worth seeing*,
+        # which is why it is a filter rather than a constraint.
+        where.append("s.processor_id IS NULL")
     if q:
         where.append("(s.name ILIKE %s OR s.source_code ILIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])

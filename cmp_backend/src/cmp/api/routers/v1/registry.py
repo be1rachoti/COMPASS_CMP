@@ -444,6 +444,7 @@ async def list_sources(
     source_status: Annotated[str | None, Query(alias="status")] = None,
     source_role: Annotated[str | None, Query()] = None,
     processor: Annotated[UUID | None, Query()] = None,
+    unmapped: Annotated[bool, Query()] = False,
     q: Annotated[str | None, Query(max_length=100)] = None,
 ) -> dict[str, Any]:
     """`processor` narrows the list to the sources one processor operates.
@@ -451,8 +452,14 @@ async def list_sources(
     That filter is what makes the collection-site form a cascade rather than two
     unrelated dropdowns: pick who operates the site, then pick from what they
     actually run, instead of scrolling a registry-wide list and hoping.
+
+    `unmapped` is the opposite question: which sources has nobody said who
+    operates. A source the organisation runs itself legitimately has no
+    processor - requiring one would mean inventing a processor record for your
+    own organisation - so this is a gap to review rather than an error to
+    prevent, and a filter is how a reviewable gap is surfaced.
     """
-    reject_unknown_filters(request, {"status", "source_role", "processor", "q"})
+    reject_unknown_filters(request, {"status", "source_role", "processor", "unmapped", "q"})
     async with connection() as conn:
         items, cursor, total = await repo.list_sources(
             conn,
@@ -460,6 +467,7 @@ async def list_sources(
             status=source_status,
             source_role=source_role,
             processor_uuid=str(processor) if processor else None,
+            unmapped=unmapped,
             q=q,
         )
     return {"items": items, "next_cursor": cursor, "total": total}

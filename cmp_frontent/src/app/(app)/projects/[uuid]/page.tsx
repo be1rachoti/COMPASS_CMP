@@ -22,6 +22,7 @@ import {
   ScrollText,
   ShieldCheck,
   Upload,
+  UserCog,
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -32,9 +33,12 @@ import { TransitionControls } from "@/features/projects/components/transition-co
 import {
   AgentForm,
   ApprovalForm,
+  AssignSiteOwnerDialog,
   ProjectForm,
   SiteForm,
+  SiteOwner,
 } from "@/features/projects/components";
+import type { SiteWithOwner } from "@/types";
 import { ExportForm } from "@/features/exchange/components/forms";
 import { NoticeCopyForm, NoticeForm } from "@/features/notices/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -88,6 +92,10 @@ export default function ProjectDetailPage() {
   const sites = useSites(uuid);
   const links = useLinks(uuid);
 
+  // Above the early returns: a hook after one runs in a different order on
+  // the render that takes the branch, which React refuses.
+  const [assigning, setAssigning] = React.useState<SiteWithOwner | null>(null);
+
   if (project.isLoading) return <DetailSkeleton />;
 
   if (project.error) {
@@ -114,6 +122,7 @@ export default function ProjectDetailPage() {
   // Minting a Field Agent link stays with the DPO and DCO: it is a credential
   // for the collection floor, not a project-setup step.
   const canManageSites = isDpo || me?.role === "dco";
+  const canAssignSiteOwner = isDpo || me?.role === "admin";
   const canExport = isDpo || me?.role === "dco";
   const noticePublished = Boolean(p.current_notice_uuid);
 
@@ -259,6 +268,12 @@ export default function ProjectDetailPage() {
                         {site.location ?? "Location not recorded"}
                         {site.processor_name && ` · operated by ${site.processor_name}`}
                       </p>
+                      {/* Who is accountable, and whether this is the site the
+                          project follows. A project spanning three campuses run
+                          by three people needs to say which one decides. */}
+                      <div className="mt-1">
+                        <SiteOwner site={site} />
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {typeof site.active_links === "number" && site.active_links > 0 && (
@@ -267,6 +282,20 @@ export default function ProjectDetailPage() {
                         </span>
                       )}
                       <StatusBadge kind="record" value={site.status} />
+                      {/* DPO and administrator only. A DCO reassigning their own
+                          sites could hand themselves somebody else's project —
+                          the API refuses it, and offering the control anyway
+                          would just produce a 403 on click. */}
+                      {canAssignSiteOwner && site.status === "active" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setAssigning(site)}
+                        >
+                          <UserCog className="size-4" />
+                          {site.dco_name ? "Reassign" : "Assign"}
+                        </Button>
+                      )}
                       {/* A link may only exist for an approved project, so the
                           control is absent until it is. */}
                       {canManageSites &&
@@ -493,6 +522,7 @@ export default function ProjectDetailPage() {
           {sheet?.kind === "agent" && <AgentForm siteUuid={sheet.siteUuid} onDone={close} />}
         </DialogContent>
       </Dialog>
+      <AssignSiteOwnerDialog site={assigning} onClose={() => setAssigning(null)} />
     </>
   );
 }

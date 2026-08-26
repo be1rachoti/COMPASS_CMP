@@ -11,3 +11,7 @@ export { SiteForm } from "@/features/projects/components/site-form";
 export { AgentForm } from "@/features/projects/components/agent-form";
 export { ApprovalForm } from "@/features/projects/components/approval-form";
 export { TransitionControls } from "@/features/projects/components/transition-controls";
+export {
+  SiteOwner,
+  AssignSiteOwnerDialog,
+} from "@/features/projects/components/site-owner";

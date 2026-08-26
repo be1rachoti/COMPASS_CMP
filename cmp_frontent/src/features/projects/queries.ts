@@ -31,8 +31,8 @@ import type {
   Page,
   Project,
   ProjectSummary,
-  Site,
   SiteListRow,
+  SiteWithOwner,
   StatusHistoryEntry,
   TransitionsView,
   Uuid,
@@ -100,8 +100,10 @@ export function useApprovals(uuid: Uuid | undefined) {
   });
 }
 
+/** Sites with their owners: the endpoint returns who is accountable and which
+ *  site the project follows, so the hook says so too. */
 export function useSites(uuid: Uuid | undefined) {
-  return useQuery<Site[], ApiError>({
+  return useQuery<SiteWithOwner[], ApiError>({
     queryKey: keys.project.sites(uuid ?? ""),
     queryFn: () => listProjectSites(uuid!),
     enabled: Boolean(uuid),

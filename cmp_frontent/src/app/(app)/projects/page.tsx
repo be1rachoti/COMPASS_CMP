@@ -13,6 +13,7 @@ import Link from "next/link";
 import * as React from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
+import { ActiveFilters } from "@/components/data-display/active-filters";
 import { useFilterParam } from "@/components/data-display/resource-list";
 import { EmptyProjects } from "@/components/ui/graphics";
 import {
@@ -53,6 +54,11 @@ function ProjectsPageView() {
   const cursor = cursors[cursors.length - 1];
 
   const { data: enums } = useEnums();
+
+  // The chip shows the label a person chose from the dropdown, not the enum
+  // value: "Pending approval", not "pending_approval".
+  const statusLabel =
+    enums?.project_status?.find((item) => item.value === status)?.label ?? status;
   const { data, isLoading, isFetching, error } = useProjects({
     status: status || undefined,
     q: query || undefined,
@@ -135,20 +141,36 @@ function ProjectsPageView() {
           </Select>
         </div>
 
-        {(status || query) && (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setStatus("");
+      </div>
+
+      {/* Each filter names itself and removes only itself. The bare "Clear"
+          this replaced said nothing about what it would clear, and a filtered
+          list that looks unfiltered is how somebody concludes a project is
+          missing. */}
+      <ActiveFilters
+        filters={[
+          {
+            label: "Status",
+            value: statusLabel,
+            onClear: () => changeStatus(""),
+          },
+          {
+            label: "Search",
+            value: query,
+            onClear: () => {
               setSearch("");
               setQuery("");
               setCursors([undefined]);
-            }}
-          >
-            Clear
-          </Button>
-        )}
-      </div>
+            },
+          },
+        ]}
+        onClearAll={() => {
+          setStatus("");
+          setSearch("");
+          setQuery("");
+          setCursors([undefined]);
+        }}
+      />
 
       {error && (
         <Alert tone="danger" title="Could not load projects">

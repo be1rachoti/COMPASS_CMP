@@ -8,7 +8,7 @@
  */
 "use client";
 
-import { Ban, Pencil, Plus } from "lucide-react";
+import { Ban, Building2, Pencil, Plus } from "lucide-react";
 import * as React from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
@@ -26,7 +26,7 @@ import { Badge, Button, Td, Tr } from "@/components/ui/primitives";
 import { StatusBadge } from "@/components/ui/status";
 import { useEnums } from "@/features/meta";
 import { useSources, useSuspendSource } from "@/features/registry";
-import type { DataSource, Page } from "@/types";
+import type { DataSource } from "@/types";
 import { humanise } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
@@ -36,22 +36,21 @@ export default function SourcesPage() {
   const stack = useCursorStack();
   const [status, setStatus] = React.useState("");
   const [q, setQ] = React.useState("");
+  const [unmapped, setUnmapped] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<DataSource | null>(null);
   const suspend = useSuspendSource();
 
   const { data: enums } = useEnums();
+  // No cast: `useSources` is typed `Page<DataSource>`. The `as unknown as`
+  // that stood here predated that and would have hidden a real drift.
   const query = useSources({
     status: status || undefined,
     q: q || undefined,
+    unmapped: unmapped || undefined,
     cursor: stack.cursor,
     limit: 25,
-  }) as unknown as {
-    data?: Page<DataSource>;
-    isLoading: boolean;
-    isFetching: boolean;
-    error: never;
-  };
+  });
 
   const canSuspend = me?.role === "dpo" || me?.role === "admin";
 
@@ -101,13 +100,33 @@ export default function SourcesPage() {
           options={enums?.record_status ?? []}
           allLabel="All statuses"
         />
+
+        {/* The gap, as a filter rather than a constraint.
+            "No processor named" is a legitimate state for a source the
+            organisation runs itself, and an error for one a third party
+            operates - and only a person can tell those apart. So the system
+            makes the set reviewable instead of guessing. */}
+        <div className="flex items-end">
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-hover has-[:checked]:border-accent-border has-[:checked]:bg-accent-subtle">
+            <input
+              type="checkbox"
+              checked={unmapped}
+              onChange={(e) => {
+                setUnmapped(e.target.checked);
+                stack.reset();
+              }}
+              className="size-4 rounded border-border-strong accent-[var(--accent)]"
+            />
+            <span className="whitespace-nowrap">No processor named</span>
+          </label>
+        </div>
       </FilterBar>
 
       <ResourceList<DataSource>
         query={query}
         stack={stack}
         caption="Registered data sources"
-        columns={["Source", "Role", "Exchange", "Authoritative for", "Status", "Action"]}
+        columns={["Source", "Processor", "Role", "Exchange", "Authoritative for", "Status", "Action"]}
         keyOf={(s) => s.source_uuid}
         empty={{
           illustration: <EmptyRecords />,
@@ -119,6 +138,21 @@ export default function SourcesPage() {
             <Td>
               <span className="font-medium">{s.name}</span>
               <p className="mt-0.5 font-mono text-xs text-text-subtle">{s.source_code}</p>
+            </Td>
+            {/* Who operates this source. Optional by design: a source the
+                organisation runs itself has no processor, and requiring one
+                would mean inventing a processor record for yourself. But an
+                absent one is worth *seeing* - a third-party source with no
+                named operator is an s.8(2) contract nobody can point to. */}
+            <Td>
+              {s.processor_name ? (
+                <span className="text-text-muted">{s.processor_name}</span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-xs text-text-subtle">
+                  <Building2 className="size-3.5" aria-hidden="true" />
+                  first party
+                </span>
+              )}
             </Td>
             <Td className="text-text-muted">{humanise(s.source_role)}</Td>
             <Td className="text-text-muted">{humanise(s.exchange_mode)}</Td>

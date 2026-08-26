@@ -19,6 +19,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   assignAgent,
   assignDco,
+  assignSiteDco,
   closeProject,
   createProject,
   createSite,
@@ -36,7 +37,7 @@ import {
   type TransitionResult,
 } from "@/features/projects/api";
 import { keys, prefixes, type Result } from "@/lib/query";
-import type { Acknowledged, Project, Site, Uuid } from "@/types";
+import type { Acknowledged, Project, Site, SiteDcoAssigned, Uuid } from "@/types";
 
 export type {
   AgentInput,
@@ -173,6 +174,31 @@ export function useUploadApproval(projectUuid: Uuid): Result<unknown, ApprovalUp
       void qc.invalidateQueries({ queryKey: keys.project.approvals(projectUuid) });
       void qc.invalidateQueries({ queryKey: keys.project.allApprovals() });
       void qc.invalidateQueries({ queryKey: keys.project.transitions(projectUuid) });
+    },
+  });
+}
+
+/**
+ * Hand a site to a DCO, and let the project follow.
+ *
+ * Invalidates the project prefix *and* the cross-project list, because this can
+ * remove a project from the caller's own scope: a DPO reassigning a site sees
+ * no change, but a DCO would find the project gone, and a stale list showing it
+ * would produce a 404 on the next click.
+ */
+export function useAssignSiteDco(): Result<
+  SiteDcoAssigned,
+  { siteUuid: Uuid; dcoUserUuid: Uuid | null }
+> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ siteUuid, dcoUserUuid }: { siteUuid: Uuid; dcoUserUuid: Uuid | null }) =>
+      assignSiteDco(siteUuid, dcoUserUuid),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: prefixes.anyProject });
+      void qc.invalidateQueries({ queryKey: keys.project.list() });
+      void qc.invalidateQueries({ queryKey: keys.project.allSites() });
+      void qc.invalidateQueries({ queryKey: keys.dashboard.all });
     },
   });
 }
