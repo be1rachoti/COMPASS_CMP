@@ -22,6 +22,7 @@ import {
   FileText,
   FolderKanban,
   Gauge,
+  HandHelping,
   Layers,
   Link2,
   LogOut,
@@ -121,6 +122,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { key: "audit", href: "/audit", label: "Audit trail", icon: ShieldCheck },
       { key: "users", href: "/users", label: "Users", icon: Users },
+      { key: "cover", href: "/cover", label: "Cover", icon: HandHelping },
     ],
   },
   {

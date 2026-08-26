@@ -8,3 +8,4 @@
 export * from "@/features/consent/api";
 export * from "@/features/consent/queries";
 export * from "@/features/consent/mutations";
+export * from "@/features/consent/components";

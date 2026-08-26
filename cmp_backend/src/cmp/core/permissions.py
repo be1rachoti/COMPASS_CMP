@@ -188,6 +188,11 @@ NAV_BY_ROLE: dict[Role, tuple[str, ...]] = {
         "imports",
         "audit",
         "users",
+        # Cover is for the roles whose access is defined by assignment. An R&D
+        # User's rows are the ones they created, and authorship is not something
+        # somebody else can stand in for - so it is absent there, deliberately,
+        # rather than forgotten.
+        "cover",
     ),
     Role.DCO: (
         "dashboard",
@@ -198,9 +203,12 @@ NAV_BY_ROLE: dict[Role, tuple[str, ...]] = {
         "exports",
         "imports",
         "collections",
+        "cover",
     ),
     Role.RND_USER: ("dashboard", "projects", "approvals", "imports", "collections"),
-    Role.ADMIN: ("dashboard", "users", "processors", "sources", "audit"),
+    # An administrator does not arrange their own cover - they have no assigned
+    # rows - but they can see and arrange it for anybody who is unreachable.
+    Role.ADMIN: ("dashboard", "users", "processors", "sources", "audit", "cover"),
     Role.DATA_SUBJECT: ("consents", "notifications", "profile"),
 }
 

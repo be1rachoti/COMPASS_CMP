@@ -31,11 +31,13 @@ import { useEnums } from "@/features/meta";
 import type { LinkListRow } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/providers";
+import { ReplaceLinkDialog } from "@/features/consent/components";
 
 function LinksPageView() {
   const stack = useCursorStack();
   const toast = useToast();
   const [status, setStatus] = useFilterParam("status");
+  const [replacing, setReplacing] = React.useState<LinkListRow | null>(null);
   const [reissue, setReissue] = React.useState<
     { siteUuid: string; siteLabel: string } | null
   >(null);
@@ -131,15 +133,31 @@ function LinksPageView() {
             </Td>
             <Td>
               <div className="flex items-center justify-end gap-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setReissue({ siteUuid: l.site_uuid, siteLabel: l.site_label })}
-                  title="Mint a new link for this site and show the URL"
-                >
-                  <RefreshCw className="size-4" />
-                  New link
-                </Button>
+                {/* Replace, not "New link". Minting a second link for a site
+                    that already has a live one leaves two working URLs and only
+                    one of them tracked. Replacing revokes and reissues in one
+                    transaction. */}
+                {l.status === "active" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setReplacing(l)}
+                    title="Revoke this link and issue a replacement"
+                  >
+                    <RefreshCw className="size-4" />
+                    Replace
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setReissue({ siteUuid: l.site_uuid, siteLabel: l.site_label })}
+                    title="Mint a new link for this site and show the URL"
+                  >
+                    <RefreshCw className="size-4" />
+                    New link
+                  </Button>
+                )}
                 {l.status === "active" && (
                   <Button
                     variant="subtle"
@@ -156,6 +174,8 @@ function LinksPageView() {
           </Tr>
         )}
       />
+
+      <ReplaceLinkDialog link={replacing} onClose={() => setReplacing(null)} />
 
       <Dialog open={reissue !== null} onOpenChange={(o) => !o && setReissue(null)}>
         <DialogContent

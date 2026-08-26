@@ -38,6 +38,7 @@ import {
 import { StatusBadge } from "@/components/ui/status";
 import {
   useMyConsentGrants,
+  useMyConsentTrail,
   useMyConsentNotice,
   useMyConsents,
   useMyDisclosures,
@@ -46,6 +47,7 @@ import {
 import type { MyConsent } from "@/types";
 import { formatDateTime, formatDuration, humanise, shortHash } from "@/lib/format";
 import { useToast } from "@/providers";
+import { ActivityFeed } from "@/components/data-display/activity-feed";
 
 export default function MyConsentsPage() {
   const consents = useMyConsents();
@@ -107,6 +109,8 @@ function ConsentCard({
   const grants = useMyConsentGrants(expanded ? consent.consent_uuid : undefined);
   const withdraw = useWithdraw(consent.consent_uuid);
   const [confirming, setConfirming] = React.useState<string[] | "all" | null>(null);
+  const [trailOpen, setTrailOpen] = React.useState(false);
+  const trail = useMyConsentTrail(trailOpen ? consent.consent_uuid : undefined);
 
   const active = !consent.is_withdrawal && consent.granted_count > 0;
 
@@ -157,12 +161,28 @@ function ConsentCard({
 
       <CardBody className="space-y-3">
         <p className="text-sm text-text-muted">
-          You agreed to {consent.granted_count} of {consent.purpose_count} purpose(s).
+          {consent.granted_count === 0
+            ? // A refusal is a decision, not an absence, and the wording says so.
+              // s.6(1) protects the freedom to refuse; a record that reads like a
+              // failure teaches people that refusing was a mistake.
+              `You were asked about ${consent.purpose_count} purpose(s) and agreed to none.`
+            : `You agreed to ${consent.granted_count} of ${consent.purpose_count} purpose(s).`}
         </p>
 
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" onClick={onToggle}>
-            {expanded ? "Hide details" : "See what you agreed to"}
+            {expanded
+              ? "Hide details"
+              : consent.granted_count === 0
+                ? "See what you were asked"
+                : "See what you agreed to"}
+          </Button>
+          {/* Every consent has a trail, refused ones included. That is the
+              point: "freely given" is not demonstrable if somebody cannot see
+              that their refusal was recorded, when, and against which notice. */}
+          <Button variant="ghost" size="sm" onClick={() => setTrailOpen((v) => !v)}>
+            <History className="size-4" />
+            {trailOpen ? "Hide the record" : "What was recorded"}
           </Button>
           {active && (
             <Button variant="subtle" size="sm" onClick={() => setConfirming("all")}>
@@ -171,6 +191,23 @@ function ConsentCard({
             </Button>
           )}
         </div>
+
+        {trailOpen && (
+          <div className="rounded-lg border border-border bg-bg-subtle p-4">
+            <h3 className="mb-1 text-sm font-medium">What was recorded</h3>
+            <p className="mb-3 text-xs text-text-muted">
+              The same record the Privacy Office sees, for this consent and every
+              change to it. Oldest first.
+            </p>
+            <ActivityFeed
+              entries={trail.data}
+              isLoading={trail.isLoading}
+              order="oldest"
+              emptyTitle="Nothing recorded yet"
+              emptyDescription="Entries appear here as things happen to this record."
+            />
+          </div>
+        )}
 
         {confirming === "all" && (
           <Alert tone="warning" title="Withdraw all purposes?">
