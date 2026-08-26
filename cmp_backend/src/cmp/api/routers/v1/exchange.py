@@ -291,6 +291,29 @@ async def _read_manifest(manifest: UploadFile) -> bytes:
     return payload
 
 
+@router.get("/imports/template", summary="A manifest file to fill in")
+async def import_template(principal: ImportActor) -> Response:
+    """The CSV, with its own instructions in it.
+
+    Registered before `/imports/{batch_uuid}` in this module so the literal path
+    wins - `template` is not a uuid, but relying on the parser to notice that is
+    relying on the wrong thing.
+
+    Not cached. The file names the valid asset types and subject roles, which
+    come from the same constants the parser checks against, so a stale copy in a
+    proxy would hand somebody a template that disagrees with the validator.
+    """
+    payload = service.manifest_template()
+    return Response(
+        content=payload,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="collection-manifest-template.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("/imports/validate", summary="Dry run - nothing is written")
 async def validate_import(
     principal: ImportActor,

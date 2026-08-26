@@ -8,6 +8,7 @@ application role, and a database trigger refuses the statement.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +16,23 @@ from cmp.core.pagination import PageRequest, build_page
 from cmp.db.sql import Conn, Row, fetch_all, fetch_one, keyset_clause
 
 LIST_SORTS = ("occurred_at",)
+
+#: Events that are true, recorded, and not activity.
+#:
+#: Signing in is not something that happened *to the work*, and a feed that
+#: leads with "you logged in" pushes out the notice somebody published. They
+#: remain in the audit trail, where a DPO investigating access wants them and
+#: knows to look; they are excluded from every activity feed.
+#:
+#: The same list the data-subject feed uses, for the same reason.
+_NOT_ACTIVITY = (
+    "auth.login_succeeded",
+    "auth.login_failed",
+    "auth.otp_requested",
+    "auth.otp_verified",
+    "auth.logout",
+    "auth.mfa_verified",
+)
 
 _SELECT = """
   l.log_uuid, l.event_type, l.entity_type, l.entity_id, l.occurred_at,
@@ -95,13 +113,11 @@ async def for_subject(conn: Conn, subject_user_id: int, *, limit: int = 50) -> l
         f"""
         SELECT {_SELECT}{_FROM}
         WHERE l.subject_user_id = %s
-          AND l.event_type NOT IN ('auth.login_succeeded', 'auth.login_failed',
-                                   'auth.otp_requested', 'auth.otp_verified',
-                                   'auth.logout', 'auth.mfa_verified')
+          AND l.event_type <> ALL(%s)
         ORDER BY l.occurred_at DESC
         LIMIT %s
         """,
-        (subject_user_id, limit),
+        (subject_user_id, list(_NOT_ACTIVITY), limit),
     )
 
 
@@ -127,3 +143,114 @@ async def denial_counts(conn: Conn, *, days: int = 7) -> int:
         (days,),
     )
     return int((row or {}).get("n", 0))
+
+
+# --------------------------------------------------------------- scoped feed
+#
+# Which audit rows belong to a project.
+#
+# The trail records what was touched as `(entity_type, entity_id)` — a table
+# name and a surrogate key — because that is the only reference guaranteed to
+# stay valid. Turning that back into "which project was this about" needs one
+# join per table, and this is the map.
+#
+# Written as a UNION rather than a chain of ORs over LEFT JOINs so each branch
+# uses its own index, and so a table added here cannot accidentally widen the
+# others. A type absent from this map contributes no rows, which is the safe
+# direction: a new entity type is invisible to the feed until somebody maps it,
+# rather than leaking into everyone's.
+_ENTITY_TO_PROJECT = """
+  SELECT 'project'::text AS t, project_id AS id, project_id AS project_id FROM project
+  UNION ALL SELECT 'notice', notice_id, project_id FROM notice
+  UNION ALL SELECT 'project_site', site_id, project_id FROM project_site
+  UNION ALL SELECT 'project_approval', approval_id, project_id FROM project_approval
+  UNION ALL SELECT 'export_log', export_id, project_id FROM export_log
+  UNION ALL SELECT 'collection', collection_id, project_id FROM collection
+  UNION ALL SELECT 'consent_link', cl.link_id, n.project_id
+              FROM consent_link cl JOIN notice n ON n.notice_id = cl.notice_id
+  UNION ALL SELECT 'consent_artefact', ca.consent_id, n.project_id
+              FROM consent_artefact ca JOIN notice n ON n.notice_id = ca.notice_id
+"""
+
+
+async def for_projects(conn: Conn, project_ids: Sequence[int], *, limit: int = 25) -> list[Row]:
+    """Recent activity on a set of projects.
+
+    This is what a dashboard's "recent activity" should be, and what it was not:
+    the R&D User's showed rows from `project` ordered by `updated_at`, which
+    says *that* something changed and never what or by whom. A person looking at
+    it could see their project had moved and had to go elsewhere to find out who
+    moved it.
+
+    Same rows, same shape and same resolver as the DPO's audit trail — narrowed
+    to projects the caller can reach. One feed, one renderer, and no second
+    definition of what an activity entry is.
+
+    An empty `project_ids` returns nothing rather than everything. That is worth
+    stating: the natural SQL for "in this list" degenerates to a tautology on an
+    empty list in some dialects, and the failure would be silent and total.
+    """
+    if not project_ids:
+        return []
+
+    return await fetch_all(
+        conn,
+        f"""
+        SELECT {_SELECT}{_FROM}
+        JOIN ({_ENTITY_TO_PROJECT}) m
+          ON m.t = l.entity_type AND m.id = l.entity_id
+        WHERE m.project_id = ANY(%s)
+          AND l.event_type <> ALL(%s)
+        ORDER BY l.occurred_at DESC
+        LIMIT %s
+        """,
+        (list(project_ids), list(_NOT_ACTIVITY), limit),
+    )
+
+
+async def by_actor(conn: Conn, actor_user_id: int, *, limit: int = 25) -> list[Row]:
+    """What this person did, most recent first.
+
+    Complements `for_projects`: an R&D User's own actions are theirs to see even
+    where the project has since moved to somebody else's scope.
+    """
+    return await fetch_all(
+        conn,
+        f"""
+        SELECT {_SELECT}{_FROM}
+        WHERE l.actor_user_id = %s
+          AND l.event_type <> ALL(%s)
+        ORDER BY l.occurred_at DESC
+        LIMIT %s
+        """,
+        (actor_user_id, list(_NOT_ACTIVITY), limit),
+    )
+
+
+async def for_consent(conn: Conn, consent_ids: Sequence[int], *, limit: int = 100) -> list[Row]:
+    """Everything recorded about one consent, oldest first.
+
+    Takes a *set* of ids because a consent is a chain: giving it writes one
+    artefact, withdrawing writes another that supersedes it, and a partial
+    change writes a third. Asking for the trail of "this consent" means the
+    whole chain, or the answer stops at whichever link the person happened to
+    open.
+
+    Ordered oldest-first, unlike every other feed here. A trail is read as a
+    story — served, agreed, disclosed, withdrawn — and a story told backwards
+    from an arbitrary point is harder to follow than one that starts at the
+    start. There are rarely more than a handful of entries.
+    """
+    if not consent_ids:
+        return []
+
+    return await fetch_all(
+        conn,
+        f"""
+        SELECT {_SELECT}{_FROM}
+        WHERE l.entity_type = 'consent_artefact' AND l.entity_id = ANY(%s)
+        ORDER BY l.occurred_at ASC
+        LIMIT %s
+        """,
+        (list(consent_ids), limit),
+    )

@@ -221,13 +221,32 @@ async def purposes_of(conn: Conn, notice_id: int) -> list[Row]:
         -- grants. It must never reach a response: every route that returns these
         -- rows declares a response model, which filters it out.
         SELECT p.purpose_id,
-               p.purpose_uuid, p.purpose_code, p.name, p.description, p.uses,
-               p.lawful_basis, p.s7_clause, p.data_categories, p.retention_period,
+               p.purpose_uuid, p.purpose_code, p.name, p.description,
+               p.lawful_basis, p.s7_clause, p.retention_period,
                p.retention_basis, p.erasure_trigger, p.cross_border_permitted,
                p.permitted_for_minors, p.status,
-               np.display_order, np.is_mandatory
+               np.display_order, np.is_mandatory,
+
+               -- Rule 3(b): what this notice actually says, which is the
+               -- override where one exists and the purpose's own otherwise.
+               -- Resolved here rather than in the caller so the notice text,
+               -- the checklist and the consent screen cannot disagree about
+               -- what was promised.
+               COALESCE(np.data_categories_override, p.data_categories) AS data_categories,
+               COALESCE(np.uses_override, p.uses)                       AS uses,
+
+               -- The purpose's own wording, kept alongside so the DPO editing a
+               -- notice can see what they are narrowing from.
+               p.data_categories AS purpose_data_categories,
+               p.uses            AS purpose_uses,
+
+               (np.data_categories_override IS NOT NULL
+                OR np.uses_override IS NOT NULL) AS is_overridden,
+               np.overridden_at,
+               ov.full_name AS overridden_by_name
         FROM notice_purpose np
         JOIN purpose p ON p.purpose_id = np.purpose_id
+        LEFT JOIN auth_user ov ON ov.id = np.overridden_by
         WHERE np.notice_id = %s
         ORDER BY np.display_order, p.name
         """,
@@ -390,3 +409,34 @@ async def list_all(
     total = await fetch_one(conn, f"SELECT count(*) AS n {base} WHERE {clause}", params)
     items, cursor = build_page(rows, req)
     return items, cursor, int((total or {}).get("n", 0))
+
+
+async def set_purpose_override(
+    conn: Conn,
+    *,
+    notice_id: int,
+    purpose_id: int,
+    data_categories: list[str] | None,
+    uses: str | None,
+    actor_id: int,
+) -> Row | None:
+    """Narrow Rule 3(b) for one notice, or clear the narrowing.
+
+    Both values null clears the override and the attribution together — a notice
+    that says "no longer narrowed, by nobody, at no time" would be a row the
+    `override_is_attributed` constraint refuses, and rightly.
+    """
+    clearing = data_categories is None and uses is None
+    return await fetch_one(
+        conn,
+        """
+        UPDATE notice_purpose
+           SET data_categories_override = %s,
+               uses_override            = %s,
+               overridden_by            = CASE WHEN %s THEN NULL ELSE %s END,
+               overridden_at            = CASE WHEN %s THEN NULL ELSE now() END
+         WHERE notice_id = %s AND purpose_id = %s
+        RETURNING notice_purpose_id, data_categories_override, uses_override
+        """,
+        (data_categories, uses, clearing, actor_id, clearing, notice_id, purpose_id),
+    )

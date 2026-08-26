@@ -243,6 +243,87 @@ VALID_ASSET_TYPES = {"image", "video", "audio", "sensor", "document", "other"}
 VALID_SUBJECT_ROLES = {"consented", "incidental", "unidentified"}
 
 
+#: What each column is for, in the words somebody filling the file in needs.
+#:
+#: Kept beside the column tuples so a column added above without a description
+#: below is visible in one screen rather than discovered by a user.
+COLUMN_HELP: dict[str, str] = {
+    "source_collection_ref": "Your reference for the collection session, e.g. a batch or run id.",
+    "source_asset_ref": "Your reference for the individual file. Unique within the collection.",
+    "asset_type": f"One of: {', '.join(sorted(VALID_ASSET_TYPES))}.",
+    "collected_on": "The date the data was captured, as YYYY-MM-DD. Not the upload date.",
+    "subject_role": (
+        f"One of: {', '.join(sorted(VALID_SUBJECT_ROLES))}. "
+        "'consented' needs a consent_uuid; 'incidental' is somebody who happened to be "
+        "in frame; 'unidentified' is a subject nobody has matched yet."
+    ),
+    "consent_uuid": (
+        "The consent this asset is covered by. Required when subject_role is "
+        "'consented', and refused otherwise."
+    ),
+    "storage_ref": "Where the file actually lives - a path, a bucket key, an internal id.",
+    "agent_ref": "Who captured it, if your process records that.",
+    "site_uuid": "The collection site, where a manifest spans more than one.",
+    "declared_asset_count": (
+        "How many assets this collection session produced in total. The gap between "
+        "this and the rows you supply is what the reconciliation report shows."
+    ),
+}
+
+
+def manifest_template() -> bytes:
+    """A CSV somebody can open, read and fill in.
+
+    Three parts: the header row, one worked example, and the guidance that
+    would otherwise be a documentation page nobody opens.
+
+    A person handed an empty file with five column names guesses at the date
+    format and at the vocabulary, and finds out they guessed wrong after
+    uploading. A file that carries its own instructions gets read at the moment
+    it is needed, by the person who needs it, in the tool they already have open.
+
+    The guidance sits below the data and is prefixed `#`, which `parse_manifest`
+    skips. So the template works whether or not somebody remembers to delete it
+    - and forgetting is the common case, because the file is usually opened in
+    Excel, edited in the middle, and saved.
+    """
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+
+    writer.writerow([*REQUIRED_COLUMNS, *OPTIONAL_COLUMNS])
+    writer.writerow(
+        [
+            "RUN-2026-001",
+            "IMG_0001.jpg",
+            "image",
+            # Timezone-aware, because a template generated near midnight in
+            # one zone and read in another should not suggest tomorrow.
+            datetime.now(UTC).date().isoformat(),
+            "consented",
+            "",  # consent_uuid - fill in for a consented subject
+            "s3://collections/run-2026-001/IMG_0001.jpg",
+            "",
+            "",
+            "",
+        ]
+    )
+
+    buf.write("\n")
+    buf.write("# Delete every line below before uploading.\n")
+    buf.write("#\n")
+    buf.write(f"# Required columns: {', '.join(REQUIRED_COLUMNS)}\n")
+    buf.write(f"# Optional columns: {', '.join(OPTIONAL_COLUMNS)}\n")
+    buf.write("#\n")
+    for column in (*REQUIRED_COLUMNS, *OPTIONAL_COLUMNS):
+        buf.write(f"# {column}: {COLUMN_HELP.get(column, '')}\n")
+    buf.write("#\n")
+    buf.write("# Validate before you import. The dry run reads the same file, applies the\n")
+    buf.write("# same checks and writes nothing, so a bad manifest costs you a click\n")
+    buf.write("# rather than a partial collection nobody can account for.\n")
+
+    return buf.getvalue().encode("utf-8")
+
+
 def parse_manifest(raw: bytes) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
     """Parse and shape-check. Returns (rows, errors). Writes nothing."""
     errors: list[dict[str, Any]] = []
@@ -251,7 +332,16 @@ def parse_manifest(raw: bytes) -> tuple[list[dict[str, str]], list[dict[str, Any
     except UnicodeDecodeError:
         return [], [{"row": 0, "field": "file", "error": "File is not valid UTF-8"}]
 
-    reader = csv.DictReader(io.StringIO(text))
+    # Comment and blank lines are dropped before the reader sees them, so the
+    # guidance in the downloadable template survives a round trip through Excel
+    # without becoming five rows of "required value is empty". A `#` is not CSV
+    # syntax, but it is the convention every tool that emits these uses, and
+    # supporting it costs one filter.
+    body = "\n".join(
+        line for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")
+    )
+
+    reader = csv.DictReader(io.StringIO(body))
     if reader.fieldnames is None:
         return [], [{"row": 0, "field": "file", "error": "File has no header row"}]
 

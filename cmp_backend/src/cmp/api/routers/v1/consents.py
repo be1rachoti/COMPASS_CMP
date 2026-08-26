@@ -21,6 +21,7 @@ from cmp.db.repositories import consent as repo
 from cmp.db.repositories import projects as project_repo
 from cmp.domain.audit import service as audit
 from cmp.domain.audit.service import Event
+from cmp.domain.consent import service as consent_service
 from cmp.schemas.common import Acknowledged, Out, Page
 
 router = APIRouter(tags=["consent"])
@@ -235,6 +236,75 @@ async def link_stats(link_uuid: UUID, principal: LinkReader) -> dict[str, Any]:
         if not link:
             raise NotFound("Consent link")
         return await repo.link_stats(conn, link["link_id"])
+
+
+@router.post("/links/{link_uuid}/remint", summary="Replace a link with a fresh one")
+async def remint_link(link_uuid: UUID, principal: LinkReader) -> dict[str, Any]:
+    """Revoke this link and mint a replacement for the same site.
+
+    This exists because the token cannot be shown twice. What the database holds
+    is a keyed digest, so a link whose URL was lost at mint time is unusable and
+    unrecoverable - and the honest fix is a new link, not a weaker store.
+
+    Both halves happen in one transaction. A revoke that succeeded without its
+    replacement would leave a site with no way to collect and somebody wondering
+    why; a mint without the revoke would leave two live links for one site, and
+    the older one is exactly the one nobody is tracking.
+
+    The old link stays in the register as `revoked`, with its use count. That is
+    the point of replacing rather than editing: the consents gathered through it
+    still point at it, and the record still says when it stopped working.
+    """
+    async with transaction() as conn:
+        link = await repo.link_by_uuid(
+            conn, str(link_uuid), role=principal.role, user_id=principal.user_id
+        )
+        if not link:
+            raise NotFound("Consent link")
+
+        revoked = await repo.revoke_link(conn, link["link_id"], principal.user_id)
+        if not revoked:
+            raise Conflict(
+                "That link is not active, so there is nothing to replace. "
+                "Mint a new one from the site instead.",
+                code="link_not_active",
+            )
+
+        fresh = await consent_service.create_link(
+            conn,
+            site_uuid=str(link["site_uuid"]),
+            # The replacement inherits the original's terms. Re-deciding them
+            # here would make this a different operation wearing the same name.
+            expires_at=link["expires_at"],
+            max_uses=link["max_uses"],
+            actor_id=principal.user_id,
+            role=principal.role,
+        )
+
+        await audit.record(
+            conn,
+            event=Event.LINK_REMINTED,
+            entity_type="consent_link",
+            entity_id=fresh["link_id"],
+            detail={
+                "replaced": str(link["link_uuid"]),
+                "site": str(link["site_uuid"]),
+                "uses_on_replaced": link["use_count"],
+            },
+        )
+
+    return {
+        "link_uuid": fresh["link_uuid"],
+        "replaced_link_uuid": link["link_uuid"],
+        "token": fresh["token"],
+        "url_path": f"/c/{fresh['token']}",
+        "expires_at": fresh["expires_at"],
+        "max_uses": fresh["max_uses"],
+        "warning": (
+            "This token is shown once and cannot be retrieved again. The previous "
+            "link has been revoked and no longer resolves."
+        ),
+    }
 
 
 @router.post("/links/{link_uuid}/revoke", response_model=Acknowledged)

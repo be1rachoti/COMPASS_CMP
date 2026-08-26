@@ -23,11 +23,13 @@ from cmp.api.dependencies import (
     RequireResource,
     reject_unknown_filters,
 )
-from cmp.core.errors import NotFound
+from cmp.core.errors import Conflict, NotFound, ValidationFailed
 from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import notices as repo
 from cmp.db.repositories import projects as project_repo
+from cmp.domain.audit import service as audit
+from cmp.domain.audit.service import Event
 from cmp.domain.notices import service as service
 from cmp.schemas.common import Acknowledged, CodeText, HttpUrl, LongText, Out, Page, Schema
 
@@ -120,6 +122,17 @@ class PurposeOnNotice(Out):
     status: str
     display_order: int
     is_mandatory: bool
+
+    # Rule 3(b) as *this notice* states it. `data_categories` and `uses` above
+    # are already the resolved values - the override where one exists, the
+    # purpose's own otherwise - so a reader of this model never has to know
+    # which. These four say where the resolved value came from, which is what a
+    # DPO editing the notice needs and nobody else does.
+    purpose_data_categories: list[str]
+    purpose_uses: str
+    is_overridden: bool = False
+    overridden_at: datetime | None = None
+    overridden_by_name: str | None = None
 
 
 class Checklist(Out):
@@ -306,6 +319,116 @@ async def attach_purpose(
             else None
         ),
     }
+
+
+class PurposeOverride(Schema):
+    """Rule 3(b), for this notice only.
+
+    Both fields null clears the override and the notice reverts to the purpose's
+    own wording. That is the same operation as "reset", so there is no separate
+    endpoint for it.
+    """
+
+    #: Rule 3(b)(i): the personal data to be collected, itemised. Must be a
+    #: subset of the purpose's own list - a notice narrows, never widens.
+    data_categories: list[str] | None = None
+    #: Rule 3(b)(ii): the specific uses this notice enables.
+    uses: Annotated[str | None, Field(default=None, max_length=20_000)] = None
+
+
+@router.put(
+    "/notices/{notice_uuid}/purposes/{purpose_uuid}",
+    summary="Narrow Rule 3(b) for this notice",
+)
+async def override_purpose(
+    notice_uuid: UUID,
+    purpose_uuid: UUID,
+    body: PurposeOverride,
+    principal: RequireDPO,
+) -> dict[str, Any]:
+    """State Rule 3(b) more narrowly on this notice than the purpose does.
+
+    A purpose is shared reference data: the same "Loyalty enrolment" is attached
+    to every notice that needs it, and its `data_categories` list covers every
+    collection it might serve. A specific project usually takes less than that,
+    and until now the only way to say so was to edit the shared purpose - which
+    changed every other notice using it.
+
+    **The override may only narrow.** `data_categories` must be a subset of the
+    purpose's, and the check is here rather than in a constraint because "is
+    this list contained in that one" is not a CHECK worth writing in SQL. The
+    rule matters: a notice that promised *more* than its purpose permits would
+    be collecting outside the basis it cites, which is the failure this whole
+    system exists to prevent.
+
+    `uses` is free text and cannot be checked mechanically, so it is attributed
+    instead - `overridden_by` and `overridden_at` are recorded, and the audit
+    event carries both texts. A human reviews it; the record says who.
+
+    Draft notices only. A published notice is frozen and hashed; changing what
+    it says is a new version, not an edit.
+    """
+    async with transaction() as conn:
+        notice = await _require_notice(conn, str(notice_uuid), principal)
+        if notice["status"] != "draft":
+            raise Conflict(
+                f"This notice is {notice['status']}. A published notice is frozen - "
+                "changing what it says is a new version.",
+                code="notice_not_draft",
+            )
+
+        attached = await repo.purposes_of(conn, notice["notice_id"])
+        purpose = next((p for p in attached if str(p["purpose_uuid"]) == str(purpose_uuid)), None)
+        if purpose is None:
+            raise NotFound("Purpose on this notice")
+
+        if body.data_categories is not None:
+            if not body.data_categories:
+                raise ValidationFailed(
+                    "Rule 3(b)(i) requires the data itemised. An empty list is not a "
+                    "narrowing, it is a notice that itemises nothing.",
+                    field="data_categories",
+                )
+            widened = sorted(set(body.data_categories) - set(purpose["purpose_data_categories"]))
+            if widened:
+                raise ValidationFailed(
+                    "A notice can narrow what its purpose covers, never widen it. "
+                    f"Not covered by '{purpose['purpose_code']}': {', '.join(widened)}.",
+                    field="data_categories",
+                )
+
+        await repo.set_purpose_override(
+            conn,
+            notice_id=notice["notice_id"],
+            purpose_id=purpose["purpose_id"],
+            data_categories=body.data_categories,
+            uses=body.uses,
+            actor_id=principal.user_id,
+        )
+
+        await audit.record(
+            conn,
+            event=Event.NOTICE_PURPOSE_OVERRIDDEN,
+            entity_type="notice",
+            entity_id=notice["notice_id"],
+            detail={
+                "purpose": str(purpose_uuid),
+                "purpose_code": purpose["purpose_code"],
+                "cleared": body.data_categories is None and body.uses is None,
+                "data_categories": body.data_categories,
+                "uses": body.uses,
+                "purpose_data_categories": purpose["purpose_data_categories"],
+            },
+        )
+
+        return {
+            "ok": True,
+            "message": (
+                "Reverted to the purpose's own wording."
+                if body.data_categories is None and body.uses is None
+                else "This notice now states Rule 3(b) more narrowly than its purpose."
+            ),
+        }
 
 
 @router.delete(

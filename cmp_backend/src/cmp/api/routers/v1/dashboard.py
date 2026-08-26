@@ -48,6 +48,37 @@ async def dashboard(principal: CurrentUser) -> dict[str, Any]:
     raise Forbidden("No dashboard for this role")
 
 
+async def _recent_activity(conn: Any, *, project_ids: list[int], actor_id: int) -> list[Any]:
+    """Recent activity, in the shape the audit trail uses.
+
+    This replaced two queries that read the wrong thing. The R&D User's read
+    `project` ordered by `updated_at`, and the DCO's read `export_log`: both
+    said *that* something happened, neither said what or who. Somebody seeing
+    their project had moved had to go elsewhere to find out who moved it.
+
+    Now the same rows, the same resolver and the same renderer as the DPO's
+    audit trail, narrowed to what the caller can reach. Their own actions are
+    merged in because a project can leave their scope after they acted on it,
+    and their own history should not vanish with it.
+    """
+    on_projects = await audit_repo.for_projects(conn, project_ids, limit=25)
+    mine = await audit_repo.by_actor(conn, actor_id, limit=25)
+
+    # Merge and de-duplicate: an action on your own project appears in both.
+    seen: set[str] = set()
+    merged = []
+    for row in sorted([*on_projects, *mine], key=lambda r: r["occurred_at"], reverse=True):
+        key = str(row["log_uuid"])
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+
+    # The same resolver the audit trail uses, so "Notice published" carries the
+    # notice it was about rather than `notice#42`.
+    return await entity_repo.attach(conn, merged[:15])
+
+
 async def _rnd(conn: Any, user_id: int) -> dict[str, Any]:
     """Own projects by status; what needs their action."""
     counts = await fetch_one(
@@ -76,11 +107,11 @@ async def _rnd(conn: Any, user_id: int) -> dict[str, Any]:
            ORDER BY p.updated_at DESC LIMIT 25""",
         (user_id,),
     )
-    recent = await fetch_all(
-        conn,
-        """SELECT project_uuid, project_name, project_status, updated_at
-           FROM project WHERE created_by = %s ORDER BY updated_at DESC LIMIT 10""",
-        (user_id,),
+    own_projects = await fetch_all(
+        conn, "SELECT project_id FROM project WHERE created_by = %s", (user_id,)
+    )
+    recent = await _recent_activity(
+        conn, project_ids=[r["project_id"] for r in own_projects], actor_id=user_id
     )
     return {
         "role": "rnd_user",
@@ -178,13 +209,24 @@ async def _dco(conn: Any, user_id: int) -> dict[str, Any]:
            ORDER BY c.collected_on DESC LIMIT 25""",
         (user_id,),
     )
-    recent = await fetch_all(
+    # Projects in this DCO's *read* scope: theirs, plus any holding a site they
+    # own, plus anyone they are covering for. Same predicate as the project
+    # list, so the feed and the list cannot show different worlds.
+    in_scope = await fetch_all(
         conn,
-        """SELECT e.export_uuid, e.export_type, e.exported_at, e.row_count,
-                  p.project_name
-           FROM export_log e JOIN project p ON p.project_id = e.project_id
-           WHERE p.dco_user_id = %s ORDER BY e.exported_at DESC LIMIT 10""",
-        (user_id,),
+        """SELECT p.project_id FROM project p
+            WHERE p.dco_user_id = %(u)s
+               OR p.dco_user_id IN (SELECT delegator_user_id FROM cmp_delegators_of(%(u)s))
+               OR EXISTS (SELECT 1 FROM project_site ps
+                           WHERE ps.project_id = p.project_id
+                             AND ps.status = 'active'
+                             AND (ps.dco_user_id = %(u)s
+                                  OR ps.dco_user_id IN
+                                     (SELECT delegator_user_id FROM cmp_delegators_of(%(u)s))))""",
+        {"u": user_id},
+    )
+    recent = await _recent_activity(
+        conn, project_ids=[r["project_id"] for r in in_scope], actor_id=user_id
     )
     return {
         "role": "dco",

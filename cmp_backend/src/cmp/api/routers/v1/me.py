@@ -16,7 +16,9 @@ from pydantic import Field
 from cmp.api.dependencies import CurrentUser, RequireDataSubject
 from cmp.core.errors import Forbidden, NotFound, ValidationFailed
 from cmp.db.pool import connection, transaction
+from cmp.db.repositories import audit as audit_repo
 from cmp.db.repositories import consent as consent_repo
+from cmp.db.repositories import entities as entity_repo
 from cmp.db.repositories import exchange as exchange_repo
 from cmp.db.repositories import users as user_repo
 from cmp.domain.audit import service as audit
@@ -240,6 +242,37 @@ async def my_consent_history(
         )
 
 
+@router.get("/consents/{consent_uuid}/trail", summary="What was recorded about this consent")
+async def my_consent_trail(
+    consent_uuid: UUID, principal: RequireDataSubject
+) -> list[dict[str, Any]]:
+    """The audit trail for one consent, in her own words rather than the DPO's.
+
+    The same rows the DPO's audit trail shows and the same entity resolver, so
+    there is one record and two views of it rather than two records that can
+    disagree. What differs is the scope: only artefacts in *her* chain for this
+    notice, which `_own_consent` has already proved is hers.
+
+    **Refused and withdrawn consents have trails too**, and this is the endpoint
+    that shows them. A decision to refuse is a decision the Act protects — s.6(1)
+    requires consent to be freely given, and "freely" is not demonstrable if the
+    person cannot see that their refusal was recorded, when, and against which
+    notice. A system that only evidences agreement is a system that quietly
+    treats refusal as an absence.
+    """
+    async with connection() as conn:
+        artefact = await _own_consent(conn, str(consent_uuid), principal.user_id)
+
+        # The whole chain, not just the artefact she opened: giving, amending
+        # and withdrawing are separate rows, and the trail of one link is not
+        # the trail of the consent.
+        chain = await consent_repo.history_chain(
+            conn, user_id=principal.user_id, notice_id=artefact["notice_id"]
+        )
+        rows = await audit_repo.for_consent(conn, [c["consent_id"] for c in chain])
+        return await entity_repo.attach(conn, rows)
+
+
 @router.post("/consents/{consent_uuid}/withdraw")
 async def withdraw(
     consent_uuid: UUID,
@@ -280,9 +313,6 @@ async def my_notifications(
     record.
     """
     async with connection() as conn:
-        from cmp.db.repositories import audit as audit_repo
-        from cmp.db.repositories import entities as entity_repo
-
         rows = await audit_repo.for_subject(conn, principal.user_id, limit=limit)
         # "What happened to my data" has to name the thing it happened to. The
         # same resolver the DPO's audit trail uses, on the same rows.
