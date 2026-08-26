@@ -154,12 +154,11 @@ async def _dpo(conn: Any) -> dict[str, Any]:
            ORDER BY p.updated_at DESC LIMIT 25""",
     )
     denials = await audit_repo.denial_counts(conn, days=7)
-    recent = await fetch_all(
-        conn,
-        """SELECT l.event_type, l.entity_type, l.occurred_at, u.full_name AS actor_name
-           FROM audit_log l LEFT JOIN auth_user u ON u.id = l.actor_user_id
-           ORDER BY l.occurred_at DESC LIMIT 15""",
-    )
+    # Full audit rows, resolved, so the dashboard panel and the audit page are
+    # the same renderer over the same data. The partial projection this replaced
+    # could not carry an entity reference, which is the half that says *what*
+    # was published rather than only that something was.
+    recent = await entity_repo.attach(conn, await audit_repo.recent(conn, limit=15))
     return {
         "role": "dpo",
         "counts": {**_ints(counts), "access_denials_7d": denials},
@@ -248,13 +247,11 @@ async def _admin(conn: Any) -> dict[str, Any]:
            WHERE status <> 'active'
            LIMIT 50""",
     )
-    denials = await fetch_all(
-        conn,
-        """SELECT l.occurred_at, l.detail_json ->> 'resource' AS resource,
-                  u.full_name AS actor_name, u.role AS actor_role
-           FROM audit_log l LEFT JOIN auth_user u ON u.id = l.actor_user_id
-           WHERE l.event_type = 'auth.access_denied'
-           ORDER BY l.occurred_at DESC LIMIT 25""",
+    # An administrator's "recent" is refusals, not activity: they provision
+    # accounts rather than run collections, and a denial is the signal they act
+    # on. Same shape as every other role's, so one renderer serves all five.
+    denials = await entity_repo.attach(
+        conn, await audit_repo.recent(conn, limit=25, event_type="auth.access_denied")
     )
     lockouts = await fetch_all(
         conn,

@@ -63,3 +63,44 @@ export interface PersonTypeHistoryEntry {
   changed_by_uuid: Uuid;
   changed_by_name: string;
 }
+
+/**
+ * One person covering another's row access for a period.
+ *
+ * Grants, never transfers: sites keep their owners and the access lapses on its
+ * own when the arrangement ends. `is_active` is computed server-side from the
+ * dates and the revocation, so every surface agrees with the scope predicate
+ * about what "active" means rather than each re-deriving it from the dates.
+ */
+export interface Delegation {
+  delegation_uuid: Uuid;
+  delegator_uuid: Uuid;
+  delegator_name: string;
+  delegator_email: string;
+  delegator_role: Role;
+  delegate_uuid: Uuid;
+  delegate_name: string;
+  delegate_email: string;
+  delegate_role: Role;
+  reason: string | null;
+  starts_at: Timestamp;
+  /** Null is open-ended. A known return date is the better arrangement: cover
+   *  that expires by itself is cover nobody has to remember to end. */
+  ends_at: Timestamp | null;
+  revoked_at: Timestamp | null;
+  created_at: Timestamp;
+  is_active: boolean;
+}
+
+export interface DelegationGranted {
+  delegation_uuid: Uuid;
+  /**
+   * False for a DPO.
+   *
+   * A DPO already reads every record, so the arrangement is the record of who
+   * was covering rather than an expansion of access. The API says so, and the
+   * UI repeats it, so nobody believes an effect that is not there.
+   */
+  grants_access: boolean;
+  message: string;
+}

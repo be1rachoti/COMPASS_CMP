@@ -142,3 +142,33 @@ export function approveNoticeLanguage(
 ): Promise<Acknowledged> {
   return apiPost<Acknowledged>(`/notices/${noticeUuid}/languages/${code}/approve`);
 }
+
+/**
+ * Rule 3(b) as one notice states it.
+ *
+ * Both null clears the override and the notice reverts to the purpose's own
+ * wording — the same operation as "reset", so there is no separate call for it.
+ */
+export interface PurposeOverride {
+  /** Rule 3(b)(i): the personal data collected, itemised. Must be a subset of
+   *  the purpose's own list — a notice narrows, never widens. */
+  data_categories?: string[] | null;
+  /** Rule 3(b)(ii): the specific uses this notice enables. */
+  uses?: string | null;
+}
+
+/**
+ * Narrow Rule 3(b) for this notice without touching the shared purpose.
+ *
+ * A purpose is reference data attached to many notices, and its category list
+ * covers every collection it might serve. A specific project usually takes
+ * less. Before this, saying so meant editing the purpose and changing every
+ * other notice using it.
+ */
+export function overrideNoticePurpose(
+  noticeUuid: Uuid,
+  purposeUuid: Uuid,
+  body: PurposeOverride,
+): Promise<Acknowledged> {
+  return apiPut<Acknowledged>(`/notices/${noticeUuid}/purposes/${purposeUuid}`, body);
+}

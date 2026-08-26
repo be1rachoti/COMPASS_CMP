@@ -23,6 +23,8 @@ import type {
   ProjectSummary,
   Site,
   SiteListRow,
+  SiteDcoAssigned,
+  SiteWithOwner,
   StatusHistoryEntry,
   TransitionsView,
   Uuid,
@@ -85,8 +87,8 @@ export function listProjectApprovals(uuid: Uuid): Promise<Approval[]> {
   return apiGet<Approval[]>(`/projects/${uuid}/approvals`);
 }
 
-export function listProjectSites(uuid: Uuid): Promise<Site[]> {
-  return apiGet<Site[]>(`/projects/${uuid}/sites`);
+export function listProjectSites(uuid: Uuid): Promise<SiteWithOwner[]> {
+  return apiGet<SiteWithOwner[]>(`/projects/${uuid}/sites`);
 }
 
 /** Sites across every project the caller may see. */
@@ -159,6 +161,9 @@ export interface SiteInput {
   location?: string | null;
   processor_uuid?: string | null;
   source_uuid?: string | null;
+  /** Who will be accountable for it. Where this is the project's first
+   *  owned site, the project routes to them on save. */
+  dco_user_uuid?: string | null;
 }
 
 export function createSite(projectUuid: Uuid, body: SiteInput): Promise<Site> {
@@ -241,4 +246,19 @@ export async function uploadApproval(
  */
 export function downloadApprovalProof(uuid: Uuid) {
   return apiDownload(`/approvals/${uuid}/proof`);
+}
+
+/**
+ * Hand a site to a DCO, or take it back with `null`.
+ *
+ * The project follows: the server re-derives its owner from the primary site,
+ * so this is the operation that moves a project between people. The response
+ * says whether it actually moved, which is the fact somebody needs before they
+ * close the dialog.
+ */
+export function assignSiteDco(
+  siteUuid: Uuid,
+  dcoUserUuid: Uuid | null,
+): Promise<SiteDcoAssigned> {
+  return apiPut<SiteDcoAssigned>(`/sites/${siteUuid}/dco`, { dco_user_uuid: dcoUserUuid });
 }

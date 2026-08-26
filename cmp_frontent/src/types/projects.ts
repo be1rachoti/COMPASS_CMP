@@ -142,3 +142,27 @@ export interface ApprovalListRow {
  * `affirmative_action_at` says when she acted on it. Together they are what
  * makes s.5(1) provable rather than asserted.
  */
+
+/**
+ * A site, with who is accountable for it.
+ *
+ * `is_primary` marks the site whose owner the project follows — the
+ * earliest-registered active one that has an owner. Surfaced because a project
+ * with three sites and three owners needs to say which of them is deciding,
+ * and "the first one" is not something a reader can work out from a list.
+ */
+export interface SiteWithOwner extends Site {
+  dco_uuid: Uuid | null;
+  dco_name: string | null;
+  dco_email: string | null;
+  is_primary: boolean;
+}
+
+/** What changed when a site was handed over. */
+export interface SiteDcoAssigned {
+  ok: boolean;
+  /** True when this assignment moved the project to a different owner. The
+   *  fact somebody needs before they close the dialog. */
+  project_moved: boolean;
+  message: string;
+}

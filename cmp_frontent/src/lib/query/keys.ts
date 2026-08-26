@@ -118,6 +118,20 @@ export const keys = {
     verify: ["audit", "verify"] as const,
   },
 
+  /**
+   * Cover arrangements.
+   *
+   * Three separate keys rather than one filtered list: "cover I arranged",
+   * "cover I provide" and "every live arrangement" are three different
+   * questions with three different audiences, and caching them together would
+   * mean a DPO's oversight view invalidating a DCO's own list.
+   */
+  delegations: {
+    mine: ["delegations", "mine"] as const,
+    held: ["delegations", "held"] as const,
+    all: ["delegations", "all"] as const,
+  },
+
   users: {
     list: (params?: Params) => ["users", params ?? {}] as const,
     sessions: ["users", "sessions"] as const,
@@ -132,6 +146,7 @@ export const keys = {
     consentGrants: (uuid: Uuid) => ["me", "consent", uuid, "grants"] as const,
     consentHistory: (uuid: Uuid) => ["me", "consent", uuid, "history"] as const,
     consentNotice: (uuid: Uuid) => ["me", "consent", uuid, "notice"] as const,
+    consentTrail: (uuid: Uuid) => ["me", "consent", uuid, "trail"] as const,
     disclosures: ["me", "disclosures"] as const,
   },
 } as const;

@@ -140,7 +140,15 @@ export default function DashboardPage() {
             <QueueCard key={queue.name} name={queue.name} items={queue.items} />
           ))}
 
-          {data.recent.length > 0 && <RecentCard items={data.recent} />}
+          {/* Rendered even when empty: the panel's empty state says activity
+              will appear here, which is more use to somebody on their first day
+              than an absent section they never learn exists. */}
+          <RecentCard
+            items={data.recent}
+            // Only the roles with an audit page get the link. A DCO following
+            // one would land on a 403.
+            seeAllHref={me?.nav.includes("audit") ? "/audit" : undefined}
+          />
         </div>
       )}
     </>

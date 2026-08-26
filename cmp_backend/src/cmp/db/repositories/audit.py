@@ -254,3 +254,21 @@ async def for_consent(conn: Conn, consent_ids: Sequence[int], *, limit: int = 10
         """,
         (list(consent_ids), limit),
     )
+
+
+async def recent(conn: Conn, *, limit: int = 15, event_type: str | None = None) -> list[Row]:
+    """The latest entries across every project.
+
+    Unscoped, so only for callers who already read every row — a DPO and an
+    administrator. There is no `user_id` parameter, and there should not be one:
+    a scoped feed is `for_projects`, and a function that could do either
+    depending on an argument is a function somebody will call with the wrong
+    argument.
+    """
+    clause = "WHERE l.event_type = %s" if event_type else ""
+    params: list[Any] = [event_type] if event_type else []
+    return await fetch_all(
+        conn,
+        f"SELECT {_SELECT}{_FROM} {clause} ORDER BY l.occurred_at DESC LIMIT %s",
+        [*params, limit],
+    )

@@ -146,3 +146,14 @@ export async function submitImport(input: ManifestUpload): Promise<ImportSubmitt
 export function downloadExport(uuid: Uuid) {
   return apiDownload(`/exports/${uuid}/download`);
 }
+
+/**
+ * The manifest template: a CSV carrying its own instructions.
+ *
+ * Header, one worked example, and per-column guidance prefixed `#`, which the
+ * parser skips — so the guidance survives a round trip through Excel rather
+ * than becoming five rows of "required value is empty".
+ */
+export function downloadManifestTemplate() {
+  return apiDownload("/imports/template");
+}

@@ -9,12 +9,18 @@ import {
   getMyConsentNotice,
   listMyConsentGrants,
   listMyConsentHistory,
+  listMyConsentTrail,
   listMyConsents,
   listMyDisclosures,
 } from "@/features/my-consents/api";
 import type { ApiError } from "@/lib/errors";
 import { keys } from "@/lib/query";
-import type { MyConsent, PurposeGrant, Uuid } from "@/types";
+import type {
+  AuditEntry,
+  MyConsent,
+  PurposeGrant,
+  Uuid,
+} from "@/types";
 
 export function useMyConsents() {
   return useQuery<MyConsent[], ApiError>({
@@ -52,5 +58,13 @@ export function useMyDisclosures() {
   return useQuery({
     queryKey: keys.me.disclosures,
     queryFn: () => listMyDisclosures(),
+  });
+}
+
+export function useMyConsentTrail(uuid: Uuid | undefined) {
+  return useQuery<AuditEntry[], ApiError>({
+    queryKey: keys.me.consentTrail(uuid ?? ""),
+    queryFn: () => listMyConsentTrail(uuid!),
+    enabled: Boolean(uuid),
   });
 }

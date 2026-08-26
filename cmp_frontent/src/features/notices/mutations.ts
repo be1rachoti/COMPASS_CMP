@@ -19,15 +19,17 @@ import {
   detachPurpose,
   publishNotice,
   setNoticeLanguage,
+  overrideNoticePurpose,
   updateNotice,
   type LanguageInput,
   type NoticeInput,
   type PurposeAttachment,
+  type PurposeOverride,
 } from "@/features/notices/api";
 import { keys, prefixes, type Result } from "@/lib/query";
 import type { Acknowledged, LanguageCode, Notice, Uuid } from "@/types";
 
-export type { LanguageInput, NoticeInput, PurposeAttachment };
+export type { LanguageInput, NoticeInput, PurposeAttachment, PurposeOverride };
 
 export function useCreateNotice(projectUuid: Uuid): Result<Notice, NoticeInput> {
   const qc = useQueryClient();
@@ -106,6 +108,24 @@ export function useApproveLanguage(noticeUuid: Uuid): Result<Acknowledged, Langu
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (code: LanguageCode) => approveNoticeLanguage(noticeUuid, code),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.notice.detail(noticeUuid) }),
+  });
+}
+
+/**
+ * Narrow Rule 3(b) on this notice.
+ *
+ * Invalidates the notice prefix, which reaches its purposes *and* its checklist:
+ * the checklist reads what the notice actually says, so an override that
+ * changed the itemised categories changes what is left to do.
+ */
+export function useOverrideNoticePurpose(
+  noticeUuid: Uuid,
+): Result<Acknowledged, { purposeUuid: Uuid; body: PurposeOverride }> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ purposeUuid, body }: { purposeUuid: Uuid; body: PurposeOverride }) =>
+      overrideNoticePurpose(noticeUuid, purposeUuid, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.notice.detail(noticeUuid) }),
   });
 }

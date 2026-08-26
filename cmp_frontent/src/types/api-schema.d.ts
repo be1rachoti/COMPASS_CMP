@@ -806,6 +806,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/consents/{consent_uuid}/trail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What was recorded about this consent
+         * @description The audit trail for one consent, in her own words rather than the DPO's.
+         *
+         *     The same rows the DPO's audit trail shows and the same entity resolver, so
+         *     there is one record and two views of it rather than two records that can
+         *     disagree. What differs is the scope: only artefacts in *her* chain for this
+         *     notice, which `_own_consent` has already proved is hers.
+         *
+         *     **Refused and withdrawn consents have trails too**, and this is the endpoint
+         *     that shows them. A decision to refuse is a decision the Act protects — s.6(1)
+         *     requires consent to be freely given, and "freely" is not demonstrable if the
+         *     person cannot see that their refusal was recorded, when, and against which
+         *     notice. A system that only evidences agreement is a system that quietly
+         *     treats refusal as an absence.
+         */
+        get: operations["my_consent_trail_me_consents__consent_uuid__trail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/consents/{consent_uuid}/withdraw": {
         parameters: {
             query?: never;
@@ -862,6 +894,105 @@ export interface paths {
          *     record.
          */
         get: operations["my_notifications_me_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delegations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every live arrangement
+         * @description Who is covering what, right now.
+         *
+         *     Restricted to DPO and administrator: it names who is standing in for whom
+         *     across the organisation, which is oversight rather than everyday work.
+         */
+        get: operations["current_delegations_get"];
+        put?: never;
+        /**
+         * Arrange cover
+         * @description Arrange for somebody to cover your work, in the same role.
+         *
+         *     Same role only, and only for yourself unless you are an administrator. Both
+         *     rules are in the service, with the reasoning; the short version is that
+         *     either one relaxed turns this into a way to acquire access rather than a way
+         *     to hand it over.
+         */
+        post: operations["grant_delegations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delegations/{delegation_uuid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * End cover now
+         * @description Either party may end it, and so may an administrator.
+         *
+         *     The delegate as well as the delegator, because being handed access one does
+         *     not want is a real situation and refusing it should not need a ticket.
+         */
+        delete: operations["revoke_delegations__delegation_uuid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delegations/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cover I have arranged
+         * @description Arrangements where the caller is the one being covered for.
+         */
+        get: operations["mine_delegations_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/delegations/held": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cover I am providing
+         * @description Arrangements where the caller is the one covering.
+         *
+         *     Worth its own endpoint rather than a filter: "whose work am I answerable for
+         *     this week" is a different question from "who is covering mine", and somebody
+         *     asking it is usually about to act on somebody else's rows.
+         */
+        get: operations["held_delegations_held_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1396,6 +1527,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sites/{site_uuid}/dco": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign the DCO accountable for a site
+         * @description Hand a site to a DCO. The project follows.
+         *
+         *     Sites are how a DCO's workload is defined — the campuses, rigs and partner
+         *     locations they are accountable for — and a project is work that happens at
+         *     some of them. So this is the only place project ownership is decided:
+         *     `trg_site_owner` re-derives `project.dco_user_id` from the primary site, and
+         *     the project moves into the new owner's list on commit.
+         *
+         *     Restricted to DPO and administrator. A DCO reassigning their own sites could
+         *     hand themselves somebody else's project, or drop one they no longer want.
+         *
+         *     The response reports the routing consequence rather than leaving the caller
+         *     to infer it: `project_moved` is true when this assignment changed who owns
+         *     the project, which is the fact somebody needs to see before they close the
+         *     dialog.
+         */
+        put: operations["assign_site_dco_sites__site_uuid__dco_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sites/{site_uuid}/deactivate": {
         parameters: {
             query?: never;
@@ -1573,7 +1738,31 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /**
+         * Narrow Rule 3(b) for this notice
+         * @description State Rule 3(b) more narrowly on this notice than the purpose does.
+         *
+         *     A purpose is shared reference data: the same "Loyalty enrolment" is attached
+         *     to every notice that needs it, and its `data_categories` list covers every
+         *     collection it might serve. A specific project usually takes less than that,
+         *     and until now the only way to say so was to edit the shared purpose - which
+         *     changed every other notice using it.
+         *
+         *     **The override may only narrow.** `data_categories` must be a subset of the
+         *     purpose's, and the check is here rather than in a constraint because "is
+         *     this list contained in that one" is not a CHECK worth writing in SQL. The
+         *     rule matters: a notice that promised *more* than its purpose permits would
+         *     be collecting outside the basis it cites, which is the failure this whole
+         *     system exists to prevent.
+         *
+         *     `uses` is free text and cannot be checked mechanically, so it is attributed
+         *     instead - `overridden_by` and `overridden_at` are recorded, and the audit
+         *     event carries both texts. A human reviews it; the record says who.
+         *
+         *     Draft notices only. A published notice is frozen and hashed; changing what
+         *     it says is a new version, not an edit.
+         */
+        put: operations["override_purpose_notices__notice_uuid__purposes__purpose_uuid__put"];
         post?: never;
         /** Draft only */
         delete: operations["detach_purpose_notices__notice_uuid__purposes__purpose_uuid__delete"];
@@ -1790,6 +1979,39 @@ export interface paths {
         get: operations["link_stats_links__link_uuid__stats_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/links/{link_uuid}/remint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a link with a fresh one
+         * @description Revoke this link and mint a replacement for the same site.
+         *
+         *     This exists because the token cannot be shown twice. What the database holds
+         *     is a keyed digest, so a link whose URL was lost at mint time is unusable and
+         *     unrecoverable - and the honest fix is a new link, not a weaker store.
+         *
+         *     Both halves happen in one transaction. A revoke that succeeded without its
+         *     replacement would leave a site with no way to collect and somebody wondering
+         *     why; a mint without the revoke would leave two live links for one site, and
+         *     the older one is exactly the one nobody is tracking.
+         *
+         *     The old link stays in the register as `revoked`, with its use count. That is
+         *     the point of replacing rather than editing: the consents gathered through it
+         *     still point at it, and the record still says when it stopped working.
+         */
+        post: operations["remint_link_links__link_uuid__remint_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2023,6 +2245,34 @@ export interface paths {
         };
         /** Who was in this file (s.11(1)(b)) */
         get: operations["export_lines_exports__export_uuid__lines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/imports/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A manifest file to fill in
+         * @description The CSV, with its own instructions in it.
+         *
+         *     Registered before `/imports/{batch_uuid}` in this module so the literal path
+         *     wins - `template` is not a uuid, but relying on the parser to notice that is
+         *     relying on the wrong thing.
+         *
+         *     Not cached. The file names the valid asset types and subject roles, which
+         *     come from the same constants the parser checks against, so a stale copy in a
+         *     proxy would hand somebody a template that disagrees with the validator.
+         */
+        get: operations["import_template_imports_template_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2989,6 +3239,90 @@ export interface components {
              * Format: uuid
              */
             dco_user_uuid: string;
+        };
+        /** DelegationGranted */
+        DelegationGranted: {
+            /**
+             * Delegation Uuid
+             * Format: uuid
+             */
+            delegation_uuid: string;
+            /** Grants Access */
+            grants_access: boolean;
+            /** Message */
+            message: string;
+        };
+        /**
+         * DelegationIn
+         * @description Who is covering for whom, and until when.
+         *
+         *     `delegator_user_uuid` is optional and defaults to the caller: the common
+         *     case is arranging your own cover, and making the caller name themselves is a
+         *     step that only exists to be got wrong. An administrator arranging cover for
+         *     somebody already unreachable names them explicitly.
+         */
+        DelegationIn: {
+            /**
+             * Delegate User Uuid
+             * Format: uuid
+             */
+            delegate_user_uuid: string;
+            /** Delegator User Uuid */
+            delegator_user_uuid?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Starts At */
+            starts_at?: string | null;
+            /** Ends At */
+            ends_at?: string | null;
+        };
+        /** DelegationOut */
+        DelegationOut: {
+            /**
+             * Delegation Uuid
+             * Format: uuid
+             */
+            delegation_uuid: string;
+            /**
+             * Delegator Uuid
+             * Format: uuid
+             */
+            delegator_uuid: string;
+            /** Delegator Name */
+            delegator_name: string;
+            /** Delegator Email */
+            delegator_email: string;
+            /** Delegator Role */
+            delegator_role: string;
+            /**
+             * Delegate Uuid
+             * Format: uuid
+             */
+            delegate_uuid: string;
+            /** Delegate Name */
+            delegate_name: string;
+            /** Delegate Email */
+            delegate_email: string;
+            /** Delegate Role */
+            delegate_role: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /** Ends At */
+            ends_at: string | null;
+            /** Revoked At */
+            revoked_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Is Active */
+            is_active: boolean;
         };
         /** ExportListRow */
         ExportListRow: {
@@ -3957,6 +4291,19 @@ export interface components {
             display_order: number;
             /** Is Mandatory */
             is_mandatory: boolean;
+            /** Purpose Data Categories */
+            purpose_data_categories: string[];
+            /** Purpose Uses */
+            purpose_uses: string;
+            /**
+             * Is Overridden
+             * @default false
+             */
+            is_overridden: boolean;
+            /** Overridden At */
+            overridden_at?: string | null;
+            /** Overridden By Name */
+            overridden_by_name?: string | null;
         };
         /** PurposeOut */
         PurposeOut: {
@@ -4001,6 +4348,20 @@ export interface components {
             created_at: unknown;
             /** Updated At */
             updated_at: unknown;
+        };
+        /**
+         * PurposeOverride
+         * @description Rule 3(b), for this notice only.
+         *
+         *     Both fields null clears the override and the notice reverts to the purpose's
+         *     own wording. That is the same operation as "reset", so there is no separate
+         *     endpoint for it.
+         */
+        PurposeOverride: {
+            /** Data Categories */
+            data_categories?: string[] | null;
+            /** Uses */
+            uses?: string | null;
         };
         /** PurposeUpdate */
         PurposeUpdate: {
@@ -4126,6 +4487,18 @@ export interface components {
              */
             current: boolean;
         };
+        /**
+         * SiteDcoAssign
+         * @description Who is accountable for this site.
+         *
+         *     `null` un-assigns, which is a real operation: a DCO leaves and their sites
+         *     have to sit unowned until somebody takes them, rather than being silently
+         *     parked with whoever happens to run the next one.
+         */
+        SiteDcoAssign: {
+            /** Dco User Uuid */
+            dco_user_uuid?: string | null;
+        };
         /** SiteIn */
         SiteIn: {
             /** Site Label */
@@ -4136,6 +4509,8 @@ export interface components {
             processor_uuid?: string | null;
             /** Source Uuid */
             source_uuid?: string | null;
+            /** Dco User Uuid */
+            dco_user_uuid?: string | null;
         };
         /** SiteListRow */
         SiteListRow: {
@@ -5669,6 +6044,39 @@ export interface operations {
             };
         };
     };
+    my_consent_trail_me_consents__consent_uuid__trail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                consent_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     withdraw_me_consents__consent_uuid__withdraw_post: {
         parameters: {
             query?: never;
@@ -5757,6 +6165,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    current_delegations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationOut"][];
+                };
+            };
+        };
+    };
+    grant_delegations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelegationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationGranted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_delegations__delegation_uuid__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delegation_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Acknowledged"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mine_delegations_mine_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationOut"][];
+                };
+            };
+        };
+    };
+    held_delegations_held_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationOut"][];
                 };
             };
         };
@@ -7074,6 +7606,43 @@ export interface operations {
             };
         };
     };
+    assign_site_dco_sites__site_uuid__dco_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteDcoAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     deactivate_site_sites__site_uuid__deactivate_post: {
         parameters: {
             query?: never;
@@ -7423,6 +7992,44 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    override_purpose_notices__notice_uuid__purposes__purpose_uuid__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_uuid: string;
+                purpose_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurposeOverride"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7874,6 +8481,39 @@ export interface operations {
             };
         };
     };
+    remint_link_links__link_uuid__remint_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     revoke_link_links__link_uuid__revoke_post: {
         parameters: {
             query?: never;
@@ -8294,6 +8934,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_template_imports_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

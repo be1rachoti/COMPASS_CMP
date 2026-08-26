@@ -10,7 +10,7 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { revokeLink } from "@/features/consent/api";
+import { remintLink, revokeLink, type RemintedLink } from "@/features/consent/api";
 import { keys, prefixes, type Result } from "@/lib/query";
 import type { Uuid } from "@/types";
 
@@ -22,6 +22,24 @@ export function useRevokeLink(): Result<{ ok: boolean; message?: string }, Uuid>
       void qc.invalidateQueries({ queryKey: keys.consent.allLinks() });
       // The link belongs to a site, which belongs to a project, and neither is
       // known here. Invalidate the prefix rather than guess wrong.
+      void qc.invalidateQueries({ queryKey: prefixes.anyProject });
+    },
+  });
+}
+
+/**
+ * Replace a link with a fresh one.
+ *
+ * Invalidates the same keys as a revoke, because that is half of what it did.
+ * The caller keeps the returned token — it is not in the cache and cannot be
+ * refetched.
+ */
+export function useRemintLink(): Result<RemintedLink, Uuid> {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: remintLink,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.consent.allLinks() });
       void qc.invalidateQueries({ queryKey: prefixes.anyProject });
     },
   });

@@ -86,3 +86,33 @@ export function getLinkStats(uuid: Uuid): Promise<LinkStats> {
 export function revokeLink(uuid: Uuid): Promise<{ ok: boolean; message?: string }> {
   return apiPost<{ ok: boolean; message?: string }>(`/links/${uuid}/revoke`);
 }
+
+/**
+ * A link that has just been minted, or re-minted.
+ *
+ * The token is in this response and nowhere else, ever again — the database
+ * holds a keyed digest. A screen that loses it before the user copies it has
+ * destroyed the thing they asked for, which is why the panel that shows it
+ * takes a deliberate action to dismiss.
+ */
+export interface RemintedLink {
+  link_uuid: Uuid;
+  replaced_link_uuid: Uuid;
+  token: string;
+  url_path: string;
+  expires_at: string;
+  max_uses: number | null;
+  warning: string;
+}
+
+/**
+ * Revoke a link and issue its replacement, in one transaction.
+ *
+ * This is the answer to "the URL is not visible anywhere". It cannot be — the
+ * stored value is a digest — so the honest operation is a new link rather than
+ * a weaker store. The replacement inherits the original's expiry and use limit,
+ * and the old one stays in the register as revoked with its use count intact.
+ */
+export function remintLink(uuid: Uuid): Promise<RemintedLink> {
+  return apiPost<RemintedLink>(`/links/${uuid}/remint`);
+}

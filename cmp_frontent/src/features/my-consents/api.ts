@@ -9,6 +9,7 @@
 
 import { apiGet, apiPost } from "@/lib/api";
 import type {
+  AuditEntry,
   ConsentHistoryEntry,
   Disclosure,
   MyConsent,
@@ -64,4 +65,19 @@ export function withdrawConsent(
   body: WithdrawInput,
 ): Promise<WithdrawalResult> {
   return apiPost<WithdrawalResult>(`/me/consents/${consentUuid}/withdraw`, body);
+}
+
+/**
+ * What was recorded about this consent — including a refusal.
+ *
+ * The same audit rows the DPO's trail shows, scoped to her own chain and
+ * resolved with the same entity labels, so there is one record and two views of
+ * it rather than two records that can disagree.
+ *
+ * A refusal has a trail as much as an agreement does. s.6(1) requires consent
+ * to be freely given, and "freely" is not demonstrable if somebody cannot see
+ * that their refusal was recorded, when, and against which notice.
+ */
+export function listMyConsentTrail(uuid: Uuid): Promise<AuditEntry[]> {
+  return apiGet<AuditEntry[]>(`/me/consents/${uuid}/trail`);
 }
