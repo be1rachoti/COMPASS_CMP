@@ -3,8 +3,20 @@
  *
  * The upload is what unblocks `under_process -> pending_approval`, so the
  * mutation invalidates the transition view as well as the approval list.
- * Without that the user uploads a document and the button they were
- * trying to unblock stays disabled.
+ * Without that the user uploads a document and the button they were trying to
+ * unblock stays disabled.
+ *
+ * **The proof is part of the form, not beside it.** It was held in component
+ * state while `approvalSchema` listed it as required, so every submit validated
+ * `proof: undefined`, failed, and returned — the button did nothing, and no
+ * control was bound to `errors.proof` so nothing said why. A form that fails
+ * silently is worse than one that fails loudly: there is nothing to read and
+ * nothing to search for.
+ *
+ * So the file goes through `setValue` with `shouldValidate`, which means the
+ * schema is the single authority on whether this approval is complete, and the
+ * size and type rules in `fileSchema(PROOF)` are actually applied rather than
+ * being a second copy of what `FileInput` checks.
  */
 "use client";
 
@@ -31,25 +43,19 @@ export function ApprovalForm({
   const toast = useToast();
   const { data: enums } = useEnums();
   const upload = useUploadApproval(projectUuid);
-  const [file, setFile] = React.useState<File | null>(null);
-  const [fileError, setFileError] = React.useState<string | null>(null);
-
   const form = useApiForm(approvalSchema, {
     approval_type: "security",
     reference_no: "",
     approved_on: "",
   });
 
-  const onSubmit = form.submit(async (values) => {
-    // INV-8: the proof is not optional metadata, it is the thing that makes the
-    // approval count. Checked here so the user is not told after upload.
-    if (!file) {
-      setFileError("A proof file is mandatory. An approval without one does not count.");
-      return;
-    }
-    setFileError(null);
+  // The file lives in form state so the schema can see it. Watched rather than
+  // duplicated into a `useState`, because two copies of "which file" is how the
+  // displayed name and the uploaded bytes come apart.
+  const file = form.watch("proof") as File | undefined;
 
-    await upload.mutateAsync({ ...values, proof: file });
+  const onSubmit = form.submit(async (values) => {
+    await upload.mutateAsync(values);
     toast.success(
       "Approval uploaded",
       "The project can now move to pending approval.",
@@ -97,12 +103,17 @@ export function ApprovalForm({
           hint="PDF or image, up to 25 MB. Stored with its SHA-256 so it can be checked later."
           accept="application/pdf,image/png,image/jpeg"
           maxBytes={MAX_PROOF_BYTES}
-          file={file}
-          onChange={(f) => {
-            setFile(f);
-            setFileError(null);
-          }}
-          error={fileError ?? undefined}
+          file={file ?? null}
+          onChange={(f) =>
+            // `shouldValidate` so choosing a file clears its error immediately
+            // rather than on the next submit, and choosing a bad one says so
+            // before the upload is attempted.
+            form.setValue("proof", f as never, {
+              shouldValidate: true,
+              shouldDirty: true,
+            })
+          }
+          error={form.formState.errors.proof?.message}
           required
         />
       </div>

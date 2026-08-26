@@ -15,7 +15,9 @@ import { MANIFEST, PROOF, describeSize, fileSchema } from "@/schemas/files";
 import {
   codeText,
   dateOnly,
+  dateTimeLocal,
   future,
+  futureDateTime,
   httpUrl,
   optional,
   pastOrToday,
@@ -24,7 +26,8 @@ import {
   uuid,
 } from "@/schemas/primitives";
 import { otpCode, password, passwordWithConfirmation } from "@/schemas/security";
-import { purposeSchema } from "@/features/registry/schemas";
+import { agentSchema, approvalSchema } from "@/features/projects/schemas";
+import { processorSchema, purposeSchema } from "@/features/registry/schemas";
 import { passwordSignInSchema } from "@/features/auth/schemas";
 
 /** Bounds copied from the server's validation package. Keep them in step. */
@@ -303,5 +306,102 @@ describe("uploads", () => {
   it("describes a size in units a person reads", () => {
     expect(describeSize(25 * 1024 * 1024)).toBe("25 MB");
     expect(describeSize(400 * 1024)).toBe("400 KB");
+  });
+});
+
+describe("a validator matches the input that feeds it", () => {
+  /**
+   * Two bugs shipped from this mismatch, so it gets its own block.
+   *
+   * `<input type="date">` produces `YYYY-MM-DD`; `<input type="datetime-local">`
+   * produces `YYYY-MM-DDTHH:mm`. A date-only validator behind a datetime input
+   * rejects *every* value a user can enter, and says "has to be a date" — which
+   * it is, in the sense the person meant.
+   *
+   * These assert the pairing at the schema level, where it is cheap, rather
+   * than leaving it to a browser test nobody runs before shipping.
+   */
+
+  it("dateOnly refuses a datetime — it is behind type=date", () => {
+    expect(dateOnly("The date").safeParse("2027-02-06").success).toBe(true);
+    expect(dateOnly("The date").safeParse("2027-02-06T14:24").success).toBe(false);
+  });
+
+  it("dateTimeLocal accepts what a datetime-local input produces", () => {
+    const field = dateTimeLocal("The expiry");
+    expect(field.safeParse("2027-02-06T14:24").success).toBe(true);
+    // Browsers append seconds when the input has a sub-minute step. A validator
+    // that refused this would fail on some machines and not others.
+    expect(field.safeParse("2027-02-06T14:24:30").success).toBe(true);
+    expect(field.safeParse("2027-02-06").success).toBe(false);
+    expect(field.safeParse("06-02-2027 14:24").success).toBe(false);
+  });
+
+  it("futureDateTime compares against now, not against today", () => {
+    // A link expiring at 09:00 today is already dead by the afternoon, so a
+    // date-level comparison would mint something unusable.
+    const field = futureDateTime("The expiry");
+    const soon = new Date(Date.now() + 60 * 60 * 1000);
+    const past = new Date(Date.now() - 60 * 60 * 1000);
+    const local = (d: Date) =>
+      new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+
+    expect(field.safeParse(local(soon)).success).toBe(true);
+    expect(field.safeParse(local(past)).success).toBe(false);
+  });
+
+  it("the agent link form accepts a real datetime-local value", () => {
+    // The exact shape the reported failure used.
+    const inOneYear = new Date(Date.now() + 365 * 86_400_000);
+    const value = new Date(inOneYear.getTime() - inOneYear.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 16);
+
+    const result = agentSchema.safeParse({
+      expires_at: value,
+      max_uses: null,
+      agent_ref: "",
+    });
+
+    expect(result.success, JSON.stringify(result.success ? {} : result.error.issues)).toBe(true);
+  });
+
+  it("the approval form accepts today, and needs its proof", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const proof = new File(["x"], "FLOW.png", { type: "image/png" });
+    Object.defineProperty(proof, "size", { value: 1_500_000 });
+
+    const complete = approvalSchema.safeParse({
+      approval_type: "security",
+      reference_no: "xzc",
+      approved_on: today,
+      proof,
+    });
+    expect(complete.success, JSON.stringify(complete.success ? {} : complete.error.issues)).toBe(
+      true,
+    );
+
+    // The proof is what makes the approval count, so its absence is a failure
+    // on `proof` — which is only useful if a control is bound to that error.
+    const noProof = approvalSchema.safeParse({
+      approval_type: "security",
+      reference_no: "xzc",
+      approved_on: today,
+    });
+    expect(noProof.success).toBe(false);
+    if (!noProof.success) {
+      expect(noProof.error.issues.some((i) => i.path.includes("proof"))).toBe(true);
+    }
+  });
+
+  it("the processor form takes a date, not a datetime", () => {
+    expect(
+      processorSchema.safeParse({
+        legal_name: "Acme Vision Ltd",
+        type: "vendor",
+        contract_ref: "C-2026-1",
+        security_confirmed_at: new Date().toISOString().slice(0, 10),
+      }).success,
+    ).toBe(true);
   });
 });

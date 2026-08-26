@@ -122,6 +122,12 @@ export default function ProjectDetailPage() {
   // Minting a Field Agent link stays with the DPO and DCO: it is a credential
   // for the collection floor, not a project-setup step.
   const canManageSites = isDpo || me?.role === "dco";
+  // Mirrors the server's rule in `projects.service.add_approval`. Approvals
+  // evidence a project moving through review, so they belong to the window
+  // when it is in review - before that there is nothing to approve, after it
+  // the decision is already recorded.
+  const canUploadApproval =
+    p.project_status === "under_process" || p.project_status === "pending_approval";
   const canAssignSiteOwner = isDpo || me?.role === "admin";
   const canExport = isDpo || me?.role === "dco";
   const noticePublished = Boolean(p.current_notice_uuid);
@@ -165,7 +171,11 @@ export default function ProjectDetailPage() {
                 </Button>
               </>
             )}
-            {isOwner && (
+            {/* Gated on the project's state as well as the role. The API
+                refuses an approval outside under_process and pending_approval,
+                and offering a control that 409s teaches people to distrust the
+                ones that work. */}
+            {isOwner && canUploadApproval && (
               <Button variant="secondary" size="sm" onClick={() => setSheet({ kind: "approval" })}>
                 <FileCheck className="size-4" />
                 Upload approval
@@ -238,7 +248,11 @@ export default function ProjectDetailPage() {
 
           <ApprovalsCard
             projectUuid={uuid}
-            canUpload={isOwner}
+            canUpload={isOwner && canUploadApproval}
+            // Passed so the empty state can say *why* there is no upload
+            // control, rather than leaving somebody to conclude the feature is
+            // missing or that they lack the permission.
+            projectStatus={p.project_status}
             onUpload={() => setSheet({ kind: "approval" })}
           />
 
@@ -561,10 +575,12 @@ function DetailSkeleton() {
 function ApprovalsCard({
   projectUuid,
   canUpload,
+  projectStatus,
   onUpload,
 }: {
   projectUuid: string;
   canUpload: boolean;
+  projectStatus: string;
   onUpload: () => void;
 }) {
   const approvals = useApprovals(projectUuid);
@@ -631,7 +647,13 @@ function ApprovalsCard({
       ) : items.length === 0 ? (
         <EmptyState
           title="No approval uploaded"
-          description="A security approval with its proof file is what unlocks the move to pending approval."
+          description={
+            canUpload
+              ? "A security approval with its proof file is what unlocks the move to pending approval."
+              : projectStatus === "in_draft"
+                ? "Approvals are added once the project is under process. There is nothing to approve while it is still a draft."
+                : "Approvals are added while a project is under review. This one has moved past that."
+          }
           action={
             canUpload ? (
               <Button variant="primary" size="sm" onClick={onUpload}>

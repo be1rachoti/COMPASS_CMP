@@ -159,11 +159,49 @@ export const pastOrToday = (field: string) =>
     `${field} cannot be in the future`,
   );
 
-/** A date that must be in the future — a link expiry, a retention deadline. */
+/** A date that must be in the future — a retention deadline, a review date. */
 export const future = (field: string) =>
   dateOnly(field).refine(
     (value) => value > new Date().toISOString().slice(0, 10),
     `${field} has to be later than today`,
+  );
+
+/**
+ * A local date **and time**, as `<input type="datetime-local">` produces it.
+ *
+ * `YYYY-MM-DDTHH:mm`, optionally with seconds — browsers append `:ss` when the
+ * input has a `step` finer than a minute, and a validator that rejects that
+ * would fail on some machines and not others.
+ *
+ * Separate from `dateOnly` because the two are not interchangeable and treating
+ * them as such is a bug this codebase has already had: `expires_at` is a
+ * datetime input and was validated with the date-only rule, so every value a
+ * user could possibly enter was rejected with "has to be a date" — which it
+ * was.
+ *
+ * The value carries no timezone, and that is correct rather than a gap. The
+ * person choosing "6 February, 2pm" means 2pm where they are; `new Date(value)`
+ * reads it in the browser's zone, which is the same intent.
+ */
+export const dateTimeLocal = (field: string) =>
+  z
+    .string()
+    .min(1, `${field} is required`)
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, `${field} has to be a date and time`)
+    .refine((value) => !Number.isNaN(new Date(value).getTime()), `${field} is not a real time`);
+
+/**
+ * A moment that must be in the future — a link expiry.
+ *
+ * Compared against `Date.now()` rather than against today's date, because "in
+ * the future" for an expiry means later than *now*: a link expiring at 09:00
+ * today is already dead at 14:00, and accepting it would mint something
+ * unusable.
+ */
+export const futureDateTime = (field: string) =>
+  dateTimeLocal(field).refine(
+    (value) => new Date(value).getTime() > Date.now(),
+    `${field} has to be in the future`,
   );
 
 /* ------------------------------------------------------------------- web */

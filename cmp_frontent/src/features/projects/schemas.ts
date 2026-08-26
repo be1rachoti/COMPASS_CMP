@@ -11,7 +11,7 @@ import { z } from "zod";
 import { PROOF, fileSchema } from "@/schemas/files";
 import {
   codeText,
-  future,
+  futureDateTime,
   optional,
   pastOrToday,
   refText,
@@ -68,7 +68,10 @@ export type SiteValues = z.infer<typeof siteSchema>;
  * an unbounded use count turns a single leaked URL into an open door.
  */
 export const agentSchema = z.object({
-  expires_at: future("The expiry date"),
+  // A datetime, not a date: the form asks for a time and a link expiring at
+  // 09:00 today is already dead by the afternoon. Validated with the
+  // date-only rule, this rejected every value a user could enter.
+  expires_at: futureDateTime("The expiry"),
   max_uses: optional(
     z.coerce
       .number({ invalid_type_error: "Enter a number of uses" })
