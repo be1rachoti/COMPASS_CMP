@@ -14,6 +14,7 @@ from cmp.api.routers.v1.audit import router as audit_router
 from cmp.api.routers.v1.auth import router as auth_router
 from cmp.api.routers.v1.consents import router as consents_router
 from cmp.api.routers.v1.dashboard import router as dashboard_router
+from cmp.api.routers.v1.delegations import router as delegations_router
 from cmp.api.routers.v1.exchange import router as exchange_router
 from cmp.api.routers.v1.me import router as me_router
 from cmp.api.routers.v1.notices import router as notices_router
@@ -27,6 +28,7 @@ __all__ = [
     "auth_router",
     "consents_router",
     "dashboard_router",
+    "delegations_router",
     "exchange_router",
     "me_router",
     "notices_router",

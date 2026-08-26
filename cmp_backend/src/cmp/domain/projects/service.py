@@ -100,7 +100,7 @@ async def create(
 async def update_draft(
     conn: Conn, *, project_uuid: str, actor_id: int, role: Role | str, **fields: Any
 ) -> dict[str, Any]:
-    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id)
+    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id, write=True)
     locked = await repo.require_for_update(conn, project["project_id"])
 
     if locked["project_status"] != ProjectStatus.IN_DRAFT.value:
@@ -144,7 +144,7 @@ async def transition(
     reason: str | None = None,
 ) -> dict[str, Any]:
     """Move a project. The single write path for `project.project_status`."""
-    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id)
+    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id, write=True)
     locked = await repo.require_for_update(conn, project["project_id"])
     current = locked["project_status"]
 
@@ -200,23 +200,50 @@ async def transition(
 async def assign_dco(
     conn: Conn, *, project_uuid: str, dco_user_uuid: str, actor_id: int, role: Role | str
 ) -> dict[str, Any]:
-    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id)
+    """Nominate the DCO for a project.
+
+    Since site ownership arrived, `project.dco_user_id` is *derived* from the
+    primary site by `trg_site_owner` — so writing it directly would produce an
+    assignment that survives only until the next time any site on the project
+    changed, at which point it would silently revert. That is the worst kind of
+    bug: correct on the screen that made it, wrong later, with nothing to point
+    at.
+
+    So this assigns the *site*, and lets the trigger route the project:
+
+    * **Project has sites** — the primary one is handed to this DCO, which moves
+      the project. Sites owned by other DCOs are left alone; they keep their
+      read access and their own sites.
+    * **Project has no sites yet** — there is nothing to derive from, so the
+      column is set directly. The first site to arrive with an owner takes over,
+      which is correct under this model and is why the response says so.
+    """
+    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id, write=True)
     dco = await user_repo.by_uuid(conn, dco_user_uuid)
     if not dco or dco["role"] != Role.DCO.value:
         raise ValidationFailed("That user is not a Data Collection Owner", field="dco_user_uuid")
     if dco["status"] != "active":
         raise ValidationFailed("That Data Collection Owner is not active", field="dco_user_uuid")
 
-    await repo.set_dco(conn, project["project_id"], dco["id"])
+    primary_site_id = await repo.primary_site_id(conn, project["project_id"])
+    if primary_site_id is not None:
+        await repo.set_site_dco(conn, primary_site_id, dco["id"])
+    else:
+        await repo.set_dco(conn, project["project_id"], dco["id"])
+
     await audit.record(
         conn,
         event=Event.PROJECT_DCO_ASSIGNED,
         entity_type="project",
         entity_id=project["project_id"],
         subject_user_id=dco["id"],
-        detail={"dco": dco_user_uuid},
+        detail={"dco": dco_user_uuid, "via_site": primary_site_id is not None},
     )
-    return {"project_uuid": project_uuid, "dco_uuid": dco_user_uuid}
+    return {
+        "project_uuid": project_uuid,
+        "dco_uuid": dco_user_uuid,
+        "assigned_via_site": primary_site_id is not None,
+    }
 
 
 async def close(
@@ -244,7 +271,7 @@ async def close(
         conn,
         event=Event.PROJECT_CLOSED,
         entity_type="project",
-        entity_id=(await repo.require(conn, project_uuid, role=role, user_id=actor_id))[
+        entity_id=(await repo.require(conn, project_uuid, role=role, user_id=actor_id, write=True))[
             "project_id"
         ],
         detail={"links_revoked": revoked, "reason": reason},
@@ -266,7 +293,7 @@ async def add_approval(
     proof_file_hash: str,
 ) -> dict[str, Any]:
     """INV-8: proof is mandatory, enforced here and by NOT NULL in the schema."""
-    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id)
+    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id, write=True)
     if not proof_file_ref or not proof_file_hash:
         raise ValidationFailed("A proof file is mandatory", field="proof")
 
@@ -316,12 +343,18 @@ async def add_site(
     location: str | None,
     processor_uuid: str | None,
     source_uuid: str | None = None,
+    dco_user_uuid: str | None = None,
 ) -> dict[str, Any]:
     """Adding a site is a material change.
 
     It adds a recipient to the notice, so it requires a new notice version. The
     service flags it; the DPO decides. What it must not do is quietly change who
     the data goes to while the published notice still names the old list.
+
+    `dco_user_uuid` is who will be accountable for it. Where this is the
+    project's first owned site, `trg_site_owner` routes the project to them on
+    commit - which is how a project reaches a DCO without anybody nominating one
+    on the project itself.
 
     `source_uuid` binds the data source that will feed this site. It is optional
     because a site can be registered before anyone has decided which rig will
@@ -331,7 +364,7 @@ async def add_site(
     """
     from cmp.db.repositories import registry as registry_repo
 
-    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id)
+    project = await repo.require(conn, project_uuid, role=role, user_id=actor_id, write=True)
 
     processor_id = None
     if processor_uuid:
@@ -357,12 +390,24 @@ async def add_site(
                 "That data source belongs to a different processor", field="source_uuid"
             )
 
+    dco_id = None
+    if dco_user_uuid:
+        from cmp.db.repositories import users as users_repo
+
+        dco = await users_repo.by_uuid(conn, dco_user_uuid)
+        if not dco or dco["role"] != Role.DCO or dco["status"] != "active":
+            raise ValidationFailed(
+                "That is not an active Data Collection Owner", field="dco_user_uuid"
+            )
+        dco_id = dco["id"]
+
     site = await repo.add_site(
         conn,
         project_id=project["project_id"],
         site_label=site_label,
         location=location,
         processor_id=processor_id,
+        dco_user_id=dco_id,
     )
 
     if source is not None:

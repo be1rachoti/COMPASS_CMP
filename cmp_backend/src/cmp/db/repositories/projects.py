@@ -4,7 +4,8 @@ Row scope lives here, in the WHERE clause, because that is the only place it is
 real. `_scope_predicate` is applied to every read a scoped caller can reach:
 
 * DPO      - every row.
-* DCO      - projects they are the nominated DCO of.
+* DCO      - projects holding a site they own (read), and projects whose
+             primary site is theirs (write). See `_scope_predicate`.
 * RnD User - projects they created.
 * Admin    - none. Administrators manage accounts, not collections.
 
@@ -26,22 +27,72 @@ PROJECT_COLUMNS = """
 """
 
 
-def _scope_predicate(role: Role | str, user_id: int) -> tuple[str, list[Any]]:
-    """The WHERE fragment that implements row scope for this role."""
+#: A DCO holds an active site on this project — their own, or one belonging to
+#: somebody they are currently covering for.
+#:
+#: Written as EXISTS rather than a join because it is used inside a WHERE on a
+#: list query: a join would multiply rows for a project with several of their
+#: sites, and the fix for that is a DISTINCT that also defeats the keyset cursor.
+#:
+#: `cmp_delegators_of` is where "currently" is defined — not revoked, started,
+#: not ended. Inlining that test here would put the definition in two places.
+_DCO_HOLDS_A_SITE = """EXISTS (
+    SELECT 1 FROM project_site ps
+     WHERE ps.project_id = p.project_id
+       AND ps.status = 'active'
+       AND (ps.dco_user_id = %s
+            OR ps.dco_user_id IN (SELECT delegator_user_id FROM cmp_delegators_of(%s)))
+)"""
+
+
+def _scope_predicate(
+    role: Role | str, user_id: int, *, write: bool = False
+) -> tuple[str, list[Any]]:
+    """The WHERE fragment that implements row scope for this role.
+
+    A DCO's scope is now two different predicates, and the difference is the
+    point of the site-ownership model:
+
+    * **Read** — any project holding an active site they own. A campus lead who
+      runs one of a study's three locations has to be able to see the study.
+    * **Write** — only projects whose *primary* site is theirs, which is what
+      `project.dco_user_id` holds (kept in step by `trg_site_owner`). One owner
+      acts; the others watch their own sites.
+
+    Passing `write=True` for a read is harmless and merely narrow. Passing it
+    the other way round is not, which is why the default is the strict one.
+    """
     scope = scope_of("project", role)
     match scope:
         case Scope.ALL:
             return "TRUE", []
         case Scope.SCOPED:
-            return "p.dco_user_id = %s", [user_id]
+            if write:
+                # Owner, or covering for the owner. A delegate acts with the
+                # delegator's authority — that is what makes cover useful rather
+                # than merely visible.
+                return (
+                    "(p.dco_user_id = %s OR p.dco_user_id IN "
+                    "(SELECT delegator_user_id FROM cmp_delegators_of(%s)))",
+                    [user_id, user_id],
+                )
+            # Owner *or* site-holder. The first disjunct is an index lookup and
+            # short-circuits for the common case.
+            return (
+                f"(p.dco_user_id = %s OR p.dco_user_id IN "
+                f"(SELECT delegator_user_id FROM cmp_delegators_of(%s)) OR {_DCO_HOLDS_A_SITE})",
+                [user_id, user_id, user_id, user_id],
+            )
         case Scope.OWN:
             return "p.created_by = %s", [user_id]
         case _:
             return "FALSE", []
 
 
-async def by_uuid(conn: Conn, project_uuid: str, *, role: Role | str, user_id: int) -> Row | None:
-    pred, params = _scope_predicate(role, user_id)
+async def by_uuid(
+    conn: Conn, project_uuid: str, *, role: Role | str, user_id: int, write: bool = False
+) -> Row | None:
+    pred, params = _scope_predicate(role, user_id, write=write)
     return await fetch_one(
         conn,
         f"""
@@ -59,8 +110,21 @@ async def by_uuid(conn: Conn, project_uuid: str, *, role: Role | str, user_id: i
     )
 
 
-async def require(conn: Conn, project_uuid: str, *, role: Role | str, user_id: int) -> Row:
-    row = await by_uuid(conn, project_uuid, role=role, user_id=user_id)
+async def require(
+    conn: Conn, project_uuid: str, *, role: Role | str, user_id: int, write: bool = False
+) -> Row:
+    """Fetch a project the caller may reach, or raise.
+
+    `write=True` narrows a DCO to projects they *own* rather than merely hold a
+    site on. Callers that mutate pass it; callers that read do not.
+
+    The failure is `NotFound`, not `Forbidden`, in both cases. A DCO who can see
+    a project but not write to it gets 404 on the write rather than 403 — the
+    distinction between "no such project" and "not yours to change" is not one
+    the API volunteers, because volunteering it confirms the project exists to
+    somebody probing uuids.
+    """
+    row = await by_uuid(conn, project_uuid, role=role, user_id=user_id, write=write)
     if row is None:
         from cmp.core.errors import NotFound
 
@@ -435,15 +499,22 @@ async def add_site(
     site_label: str,
     location: str | None,
     processor_id: int | None,
+    dco_user_id: int | None = None,
 ) -> Row:
+    """Register a site.
+
+    `dco_user_id` is what routes the project: `trg_site_owner` re-derives
+    `project.dco_user_id` from the primary site after this insert, so adding the
+    first site with an owner hands the project to them.
+    """
     row = await fetch_one(
         conn,
         """
-        INSERT INTO project_site (project_id, site_label, location, processor_id)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO project_site (project_id, site_label, location, processor_id, dco_user_id)
+        VALUES (%s, %s, %s, %s, %s)
         RETURNING site_id, site_uuid, site_label, location, status, created_at
         """,
-        (project_id, site_label, location, processor_id),
+        (project_id, site_label, location, processor_id, dco_user_id),
     )
     assert row is not None
     return row
@@ -455,12 +526,17 @@ async def list_sites(conn: Conn, project_id: int) -> list[Row]:
         """
         SELECT s.site_uuid, s.site_label, s.location, s.status, s.created_at,
                pr.processor_uuid, pr.legal_name AS processor_name,
+               dco.uuid AS dco_uuid, dco.full_name AS dco_name, dco.email AS dco_email,
+               -- The primary site is the one whose owner the project follows.
+               -- Surfaced so the UI can say which of several sites is deciding.
+               (s.site_id = cmp_primary_site_id(s.project_id)) AS is_primary,
                (SELECT count(*) FROM consent_link cl
                  WHERE cl.site_id = s.site_id AND cl.status = 'active') AS active_links
         FROM project_site s
         LEFT JOIN processor pr ON pr.processor_id = s.processor_id
+        LEFT JOIN auth_user dco ON dco.id = s.dco_user_id
         WHERE s.project_id = %s
-        ORDER BY s.created_at
+        ORDER BY s.site_id
         """,
         (project_id,),
     )
@@ -473,10 +549,12 @@ async def site_by_uuid(conn: Conn, site_uuid: str, *, role: Role | str, user_id:
         f"""
         SELECT s.site_id, s.site_uuid, s.site_label, s.location, s.status, s.created_at,
                p.project_id, p.project_uuid, p.project_status,
-               pr.processor_uuid, pr.legal_name AS processor_name
+               pr.processor_uuid, pr.legal_name AS processor_name,
+               s.dco_user_id, dco.uuid AS dco_uuid, dco.full_name AS dco_name
         FROM project_site s
         JOIN project p ON p.project_id = s.project_id
         LEFT JOIN processor pr ON pr.processor_id = s.processor_id
+        LEFT JOIN auth_user dco ON dco.id = s.dco_user_id
         WHERE s.site_uuid = %s AND ({pred})
         """,
         [site_uuid, *params],
@@ -496,6 +574,51 @@ async def update_site(
         RETURNING site_uuid, site_label, location, status
         """,
         (site_label, location, site_id),
+    )
+    assert row is not None
+    return row
+
+
+async def primary_site_id(conn: Conn, project_id: int) -> int | None:
+    """The site whose owner the project follows, or None if it has no owned site.
+
+    Delegates to the database function rather than repeating the ORDER BY here,
+    so the answer this returns and the answer the trigger acts on are the same
+    answer by construction.
+    """
+    row = await fetch_one(conn, "SELECT cmp_primary_site_id(%s) AS site_id", (project_id,))
+    return None if row is None else row["site_id"]
+
+
+async def project_dco_id(conn: Conn, project_id: int) -> int | None:
+    """Who currently owns this project.
+
+    Read either side of a site reassignment so the response can say whether the
+    project actually changed hands. The trigger decides; this only reports.
+    """
+    row = await fetch_one(
+        conn, "SELECT dco_user_id FROM project WHERE project_id = %s", (project_id,)
+    )
+    return None if row is None else row["dco_user_id"]
+
+
+async def set_site_dco(conn: Conn, site_id: int, dco_user_id: int | None) -> Row:
+    """Hand a site to a DCO, or take it back.
+
+    The project follows: `trg_site_owner` fires on this UPDATE and re-derives
+    `project.dco_user_id` from whichever active site is now primary. That is the
+    whole mechanism behind "move the site and the project moves with it" — it is
+    in the database rather than here, so a second code path that reassigns a
+    site cannot forget to do it.
+    """
+    row = await fetch_one(
+        conn,
+        """
+        UPDATE project_site SET dco_user_id = %s
+         WHERE site_id = %s
+        RETURNING site_id, site_uuid, site_label, project_id, dco_user_id
+        """,
+        (dco_user_id, site_id),
     )
     assert row is not None
     return row

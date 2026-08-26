@@ -21,6 +21,7 @@ from cmp.api.dependencies import (
     CurrentUser,
     Paging,
     RequireDPO,
+    RequireDPOorAdmin,
     RequireResource,
     reject_unknown_filters,
 )
@@ -91,6 +92,22 @@ class SiteIn(Schema):
     #: before anyone has decided what will stand in it - but where given it must
     #: belong to the same processor.
     source_uuid: UUID | None = None
+    #: The DCO accountable for this site. Optional here and settable later
+    #: through `PUT /sites/{uuid}/dco`, because an R&D User registering a site
+    #: often does not know who will run it - but where it is given, and this is
+    #: the project's first site, the project routes to them immediately.
+    dco_user_uuid: UUID | None = None
+
+
+class SiteDcoAssign(Schema):
+    """Who is accountable for this site.
+
+    `null` un-assigns, which is a real operation: a DCO leaves and their sites
+    have to sit unowned until somebody takes them, rather than being silently
+    parked with whoever happens to run the next one.
+    """
+
+    dco_user_uuid: UUID | None = None
 
 
 class SiteUpdate(Schema):
@@ -485,6 +502,7 @@ async def add_site(project_uuid: UUID, body: SiteIn, principal: ProjectReader) -
             location=body.location,
             processor_uuid=str(body.processor_uuid) if body.processor_uuid else None,
             source_uuid=str(body.source_uuid) if body.source_uuid else None,
+            dco_user_uuid=str(body.dco_user_uuid) if body.dco_user_uuid else None,
         )
 
 
@@ -519,6 +537,77 @@ async def update_site(
             entity_id=site["site_id"],
         )
     return updated
+
+
+@router.put("/sites/{site_uuid}/dco", summary="Assign the DCO accountable for a site")
+async def assign_site_dco(
+    site_uuid: UUID, body: SiteDcoAssign, principal: RequireDPOorAdmin
+) -> dict[str, Any]:
+    """Hand a site to a DCO. The project follows.
+
+    Sites are how a DCO's workload is defined — the campuses, rigs and partner
+    locations they are accountable for — and a project is work that happens at
+    some of them. So this is the only place project ownership is decided:
+    `trg_site_owner` re-derives `project.dco_user_id` from the primary site, and
+    the project moves into the new owner's list on commit.
+
+    Restricted to DPO and administrator. A DCO reassigning their own sites could
+    hand themselves somebody else's project, or drop one they no longer want.
+
+    The response reports the routing consequence rather than leaving the caller
+    to infer it: `project_moved` is true when this assignment changed who owns
+    the project, which is the fact somebody needs to see before they close the
+    dialog.
+    """
+    async with transaction() as conn:
+        site = await repo.site_by_uuid(
+            conn, str(site_uuid), role=principal.role, user_id=principal.user_id
+        )
+        if not site:
+            raise NotFound("Site")
+
+        dco_id: int | None = None
+        if body.dco_user_uuid is not None:
+            from cmp.db.repositories import users as users_repo
+
+            dco = await users_repo.by_uuid(conn, str(body.dco_user_uuid))
+            if not dco:
+                raise NotFound("User")
+            if dco["role"] != Role.DCO:
+                raise ValidationFailed(
+                    "Only a Data Collection Owner can be accountable for a site",
+                    field="dco_user_uuid",
+                )
+            if dco["status"] != "active":
+                raise ValidationFailed("That account is not active", field="dco_user_uuid")
+            dco_id = dco["id"]
+
+        owner_before = await repo.project_dco_id(conn, site["project_id"])
+        await repo.set_site_dco(conn, site["site_id"], dco_id)
+        owner_after = await repo.project_dco_id(conn, site["project_id"])
+
+        await audit.record(
+            conn,
+            event=Event.SITE_DCO_ASSIGNED,
+            entity_type="project_site",
+            entity_id=site["site_id"],
+            detail={
+                "site_label": site["site_label"],
+                "project": str(site["project_uuid"]),
+                "dco": str(body.dco_user_uuid) if body.dco_user_uuid else None,
+                "project_owner_changed": owner_before != owner_after,
+            },
+        )
+
+    return {
+        "ok": True,
+        "project_moved": owner_before != owner_after,
+        "message": (
+            "Site assigned. This project has moved to the new owner."
+            if owner_before != owner_after
+            else "Site assigned. The project's owner is unchanged."
+        ),
+    }
 
 
 @router.post("/sites/{site_uuid}/deactivate", response_model=Acknowledged)

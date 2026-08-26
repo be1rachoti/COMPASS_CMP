@@ -26,6 +26,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     # Identity and the reference registry.
     v1.users_router,
     v1.me_router,
+    v1.delegations_router,
     v1.registry_router,
     # The project lifecycle, in the order it is walked.
     v1.projects_router,

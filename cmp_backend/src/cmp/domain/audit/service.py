@@ -122,12 +122,24 @@ class Event:
     SITE_UPDATED = "site.updated"
     SITE_DEACTIVATED = "site.deactivated"
     SITE_AGENT_ASSIGNED = "site.agent_assigned"
+    #: A site changed hands. The project follows it, so this event is the record
+    #: of *why* a project appeared in somebody else's list.
+    SITE_DCO_ASSIGNED = "site.dco_assigned"
+    #: A capability link was replaced: the old one revoked, a new one minted.
+    #: Two events would be truthful and would separate a single decision.
+    LINK_REMINTED = "link.reminted"
+
+    # delegation
+    DELEGATION_GRANTED = "delegation.granted"
+    DELEGATION_REVOKED = "delegation.revoked"
 
     # notices
     NOTICE_CREATED = "notice.created"
     NOTICE_UPDATED = "notice.updated"
     NOTICE_PURPOSE_ATTACHED = "notice.purpose_attached"
     NOTICE_PURPOSE_DETACHED = "notice.purpose_detached"
+    #: Rule 3(b) narrowed for one notice, without touching the shared purpose.
+    NOTICE_PURPOSE_OVERRIDDEN = "notice.purpose_overridden"
     NOTICE_LANGUAGE_ADDED = "notice.language_added"
     NOTICE_LANGUAGE_UPDATED = "notice.language_updated"
     NOTICE_LANGUAGE_APPROVED = "notice.language_approved"
