@@ -14,12 +14,8 @@ import { optional, uuid } from "@/schemas/primitives";
 
 /* ---------------------------------------------------------------- export */
 
-export const exportSchema = z.object({
-  type: z.string().min(1, "Choose what to export"),
-  site: uuid("The site"),
-});
-
-export type ExportValues = z.infer<typeof exportSchema>;
+// The export form has no fields: one kind of export, covering the project, with
+// its contents decided by who is asking. Nothing left to validate.
 
 /* ---------------------------------------------------------------- import */
 

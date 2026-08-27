@@ -404,4 +404,19 @@ describe("a validator matches the input that feeds it", () => {
       }).success,
     ).toBe(true);
   });
+
+  it("a processor is third-party unless somebody says otherwise", () => {
+    // The direction of the default is the assertion. An unanswered question
+    // routes the project through a DCO Admin, which is the path with the extra
+    // pair of eyes; flipping it would send projects straight back to their own
+    // author on a field nobody filled in.
+    const parsed = processorSchema.safeParse({
+      legal_name: "Acme Vision Ltd",
+      type: "vendor",
+      contract_ref: "C-2026-1",
+      security_confirmed_at: new Date().toISOString().slice(0, 10),
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.is_in_house).toBe(false);
+  });
 });

@@ -29,13 +29,26 @@ import { EmptyRecords } from "@/components/ui/graphics";
 import { Badge, Button, Mono, Td, Tr } from "@/components/ui/primitives";
 import { downloadExport, useAllExports } from "@/features/exchange";
 import type { ExportListRow } from "@/types";
-import { formatDateTime, saveBlob, shortHash } from "@/lib/format";
+import { formatDateTime, humanise, saveBlob, shortHash } from "@/lib/format";
 import { useToast } from "@/providers";
 
+/**
+ * The filter still offers the historical types, because the rows are still
+ * there. An export is a disclosure record: the two old kinds stopped being
+ * generated, they did not stop having happened.
+ */
 const TYPE_OPTIONS = [
-  { value: "collection_pack", label: "Collection pack (no personal data)" },
-  { value: "consented_list", label: "Consented list" },
+  { value: "project_export", label: "Project export (CSV, personal data)" },
+  { value: "consented_list", label: "Consented list (historical)" },
+  { value: "collection_pack", label: "Collection pack (historical)" },
 ];
+
+/** How each kind reads in the table. */
+const TYPE_LABEL: Record<string, { label: string; tone: "neutral" | "warning" }> = {
+  project_export: { label: "Project export", tone: "warning" },
+  consented_list: { label: "Consented list", tone: "warning" },
+  collection_pack: { label: "Collection pack", tone: "neutral" },
+};
 
 export default function ExportsPage() {
   const stack = useCursorStack();
@@ -128,18 +141,22 @@ export default function ExportsPage() {
                 {e.project_name}
               </Link>
             </Td>
-            <Td className="text-text-muted">{e.site_label ?? "—"}</Td>
+            {/* A project export covers every site the exporter could see, so
+                there is no single one to name — each row in the file names its
+                own. The column stays for the per-site exports that predate it. */}
+            <Td className="text-text-muted">{e.site_label ?? "Whole project"}</Td>
             <Td>
               <Badge
-                tone={e.export_type === "collection_pack" ? "neutral" : "warning"}
+                tone={TYPE_LABEL[e.export_type]?.tone ?? "neutral"}
                 dot={false}
               >
-                {e.export_type === "collection_pack" ? "Collection pack" : "Consented list"}
+                {TYPE_LABEL[e.export_type]?.label ?? humanise(e.export_type)}
               </Badge>
             </Td>
             <Td className="tabular text-text-muted">
-              {/* Zero for a collection pack - it carries no person rows, which
-                  is what makes it safe to email. */}
+              {/* One per person disclosed. Zero on a project export means nobody
+                  had consented yet, and on a collection pack means it never
+                  carried person rows at all. */}
               {e.line_count ?? 0}
             </Td>
             <Td>

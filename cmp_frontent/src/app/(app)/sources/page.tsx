@@ -8,7 +8,8 @@
  */
 "use client";
 
-import { Ban, Building2, Pencil, Plus } from "lucide-react";
+import { Ban, Building2, Pencil, Plus, UserRoundCog } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import * as React from "react";
 
 import { PageHeader } from "@/components/layout/app-shell";
@@ -20,6 +21,10 @@ import {
   useCursorStack,
 } from "@/components/data-display/resource-list";
 import { SourceForm } from "@/features/registry/components/forms";
+import {
+  AssignSourceOwnerDialog,
+  SourceOwner,
+} from "@/features/registry/components/source-owner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { EmptyRecords } from "@/components/ui/graphics";
 import { Badge, Button, Td, Tr } from "@/components/ui/primitives";
@@ -34,11 +39,20 @@ export default function SourcesPage() {
   const { me } = useAuth();
   const toast = useToast();
   const stack = useCursorStack();
-  const [status, setStatus] = React.useState("");
-  const [q, setQ] = React.useState("");
-  const [unmapped, setUnmapped] = React.useState(false);
+
+  // Seeded from the URL, then owned by the page. A dashboard count is a claim
+  // about a subset — "12 sources with nobody accountable" — and a link that
+  // lands on the unfiltered registry makes the reader find those twelve
+  // themselves. Read once rather than synced, because after arriving the
+  // controls on screen are the ones in charge.
+  const params = useSearchParams();
+  const [status, setStatus] = React.useState(params.get("status") ?? "");
+  const [q, setQ] = React.useState(params.get("q") ?? "");
+  const [unmapped, setUnmapped] = React.useState(params.get("unmapped") === "1");
+  const [unowned, setUnowned] = React.useState(params.get("unowned") === "1");
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<DataSource | null>(null);
+  const [assigning, setAssigning] = React.useState<DataSource | null>(null);
   const suspend = useSuspendSource();
 
   const { data: enums } = useEnums();
@@ -48,11 +62,21 @@ export default function SourcesPage() {
     status: status || undefined,
     q: q || undefined,
     unmapped: unmapped || undefined,
+    unowned: unowned || undefined,
     cursor: stack.cursor,
     limit: 25,
   });
 
   const canSuspend = me?.role === "dpo" || me?.role === "admin";
+  // Making somebody accountable is the DCO Admin's routing step as well as an
+  // administrative one, so they hold it alongside the DPO and the administrator.
+  const canAssignOwner = canSuspend || me?.role === "dco_admin";
+  // A collection owner registers the rigs they will run: a campus lead who
+  // needs a second one should not have to ask somebody else to type it in.
+  // Which processor they may register under is the constraint, and the form
+  // applies it — not whether they may at all.
+  const canCreate =
+    canSuspend || me?.role === "dco_admin" || me?.role === "dco" || me?.role === "rco";
 
   async function onSuspend(uuid: string, name: string) {
     try {
@@ -73,7 +97,7 @@ export default function SourcesPage() {
         title="Data sources"
         description="Where records come from and which fields each one owns. A source that is not authoritative for a field must never overwrite it."
         actions={
-          canSuspend ? (
+          canCreate ? (
             <Button variant="primary" onClick={() => setCreating(true)}>
               <Plus className="size-4" />
               Register source
@@ -120,13 +144,40 @@ export default function SourcesPage() {
             <span className="whitespace-nowrap">No processor named</span>
           </label>
         </div>
+
+        {/* The routing queue, as a filter. A source nobody is accountable for
+            cannot route a project, so this is the list somebody works through
+            rather than a fault to fix. */}
+        <div className="flex items-end">
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-hover has-[:checked]:border-accent-border has-[:checked]:bg-accent-subtle">
+            <input
+              type="checkbox"
+              checked={unowned}
+              onChange={(e) => {
+                setUnowned(e.target.checked);
+                stack.reset();
+              }}
+              className="size-4 rounded border-border-strong accent-[var(--accent)]"
+            />
+            <span className="whitespace-nowrap">Nobody accountable</span>
+          </label>
+        </div>
       </FilterBar>
 
       <ResourceList<DataSource>
         query={query}
         stack={stack}
         caption="Registered data sources"
-        columns={["Source", "Processor", "Role", "Exchange", "Authoritative for", "Status", "Action"]}
+        columns={[
+          "Source",
+          "Processor",
+          "Accountable",
+          "Role",
+          "Exchange",
+          "Authoritative for",
+          "Status",
+          "Action",
+        ]}
         keyOf={(s) => s.source_uuid}
         empty={{
           illustration: <EmptyRecords />,
@@ -154,6 +205,9 @@ export default function SourcesPage() {
                 </span>
               )}
             </Td>
+            <Td>
+              <SourceOwner source={s} />
+            </Td>
             <Td className="text-text-muted">{humanise(s.source_role)}</Td>
             <Td className="text-text-muted">{humanise(s.exchange_mode)}</Td>
             <Td>
@@ -173,25 +227,33 @@ export default function SourcesPage() {
               <StatusBadge kind="record" value={s.status} />
             </Td>
             <Td>
-              {canSuspend && (
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
-                    <Pencil className="size-4" />
-                    Edit
+              <div className="flex gap-1">
+                {canAssignOwner && s.status === "active" && (
+                  <Button variant="ghost" size="sm" onClick={() => setAssigning(s)}>
+                    <UserRoundCog className="size-4" />
+                    {s.owner_name ? "Reassign" : "Assign"}
                   </Button>
-                  {s.status === "active" && (
-                    <Button
-                      variant="subtle"
-                      size="sm"
-                      loading={suspend.isPending}
-                      onClick={() => onSuspend(s.source_uuid, s.name)}
-                    >
-                      <Ban className="size-4" />
-                      Suspend
+                )}
+                {canSuspend && (
+                  <>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
+                      <Pencil className="size-4" />
+                      Edit
                     </Button>
-                  )}
-                </div>
-              )}
+                    {s.status === "active" && (
+                      <Button
+                        variant="subtle"
+                        size="sm"
+                        loading={suspend.isPending}
+                        onClick={() => onSuspend(s.source_uuid, s.name)}
+                      >
+                        <Ban className="size-4" />
+                        Suspend
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
             </Td>
           </Tr>
         )}
@@ -212,6 +274,8 @@ export default function SourcesPage() {
           {editing && <SourceForm source={editing} onDone={() => setEditing(null)} />}
         </DialogContent>
       </Dialog>
+
+      <AssignSourceOwnerDialog source={assigning} onClose={() => setAssigning(null)} />
     </>
   );
 }

@@ -4,13 +4,16 @@
 rows; downloading is separate and repeatable. Regenerating to re-download would
 write duplicate `export_line` rows and corrupt the disclosure record.
 
-Two export types:
+**One export, per project, as a CSV.** There were two and the split asked the
+wrong question of the person using it: a JSON pack with the context and no
+people, and a CSV with the people and no context. The agent at the collection
+point needs both on the same row - whom the consent is against, and which notice
+version they agreed to - and was joining two files by hand to get it.
 
-* **A - collection_pack.** Project, notice and purpose identifiers plus the
-  site's consent link. No person rows, which is what makes it safe to email.
-* **B - consented_list.** Only subjects whose current artefact grants at least
-  one purpose, filtered by site, with a staleness header. Writes one
-  `export_line` per subject.
+Every row carries the project, the notice and the site alongside the person, so
+it opens in a spreadsheet and filters without preparation. Consented, partial
+and withdrawn rows are included with a status column; a withdrawal is the row an
+agent most needs to see, and it is invisible on a consented-only list.
 
 **Imports are idempotent.** Rows upsert on (source, source_reference).
 Re-submitting the same file accepts nothing and reports zero. `validate` is a dry
@@ -33,7 +36,6 @@ from cmp.core.logging import get_logger
 from cmp.core.security import file_hash
 from cmp.db.repositories import consent as consent_repo
 from cmp.db.repositories import exchange as repo
-from cmp.db.repositories import notices as notice_repo
 from cmp.db.repositories import projects as project_repo
 from cmp.db.repositories import registry as registry_repo
 from cmp.db.sql import Conn
@@ -50,29 +52,31 @@ async def generate(
     conn: Conn,
     *,
     project_uuid: str,
-    site_uuid: str,
-    export_type: str,
     actor_id: int,
     role: str,
 ) -> dict[str, Any]:
+    """Generate this project's export and record what it disclosed.
+
+    No type and no site. The type is gone because there is one; the site is gone
+    because a project is the thing people talk about and which of its sites a
+    row came from is a column.
+
+    What the caller may see still decides the contents: `project_consents` is
+    scoped by site ownership, so a DCO's export holds their campus's people and
+    an RCO's holds theirs. Generating and downloading stay two steps - a
+    re-download must not write a second disclosure record.
+    """
     project = await project_repo.require(conn, project_uuid, role=role, user_id=actor_id)
-    site = await project_repo.site_by_uuid(conn, site_uuid, role=role, user_id=actor_id)
-    if not site or site["project_id"] != project["project_id"]:
-        raise NotFound("Site")
 
-    if export_type == "collection_pack":
-        payload, rows, lines = await _collection_pack(conn, project, site)
-    elif export_type == "consented_list":
-        payload, rows, lines = await _consented_list(conn, project, site)
-    else:
-        raise ValidationFailed("Unknown export type", field="type")
-
+    payload, rows, lines = await _project_export(conn, project, role=role, user_id=actor_id)
     digest = file_hash(payload.encode("utf-8"))
     export = await repo.create_export(
         conn,
         project_id=project["project_id"],
-        site_id=site["site_id"],
-        export_type=export_type,
+        # No single site: the export covers every one the exporter could see,
+        # and each row names its own.
+        site_id=None,
+        export_type="project_export",
         exported_by=actor_id,
         row_count=rows,
         file_hash=digest,
@@ -86,147 +90,141 @@ async def generate(
         entity_id=export["export_id"],
         detail={
             "project": project_uuid,
-            "site": site_uuid,
-            "type": export_type,
+            "type": "project_export",
             "row_count": rows,
             "lines": written,
             "sha256": digest,
         },
     )
-    log.info("export.generated", type=export_type, rows=rows, lines=written)
-    return {**export, "project_uuid": project_uuid, "site_uuid": site_uuid, "line_count": written}
+    log.info("export.generated", project=project_uuid, rows=rows, lines=written)
+    return {**export, "project_uuid": project_uuid, "line_count": written}
 
 
-async def _collection_pack(
-    conn: Conn, project: dict[str, Any], site: dict[str, Any]
-) -> tuple[str, int, list[tuple[int, int]]]:
-    """Export A. Identifiers and the link - deliberately no person rows."""
-    notices = await notice_repo.list_for_project(conn, project["project_id"])
-    published = [n for n in notices if n["status"] == "published"]
-    if not published:
-        raise Conflict("The project has no published notice", code="no_published_notice")
-    notice = max(published, key=lambda n: n["version"])
+#: The columns, in the order somebody reads them: what this is, who it is about,
+#: what they agreed to, and what they were shown when they agreed.
+EXPORT_COLUMNS = (
+    "project_name",
+    "project_uuid",
+    "site_label",
+    "source_code",
+    # Which link the consent came in through, and whether that channel is still
+    # open. Not the URL: the token is stored as a keyed digest and the working
+    # address cannot be rebuilt from the database, which is what stops a copy of
+    # this file from being a set of live collection credentials.
+    "consent_link_uuid",
+    "link_status",
+    "link_expires_at",
+    "consent_uuid",
+    "full_name",
+    "email",
+    "mobile",
+    "organization_id",
+    "person_type",
+    "consent_status",
+    "granted_purposes",
+    "consented_at",
+    "notice_code",
+    "notice_version",
+    "notice_content_sha256",
+)
 
-    purposes = await notice_repo.purposes_of(conn, notice["notice_id"])
-    links = [
-        link
-        for link in await consent_repo.links_for_project(conn, project["project_id"])
-        if str(link["site_uuid"]) == str(site["site_uuid"]) and link["status"] == "active"
+
+def _consent_status(row: dict[str, Any]) -> str:
+    """The word an agent acts on.
+
+    `partial` rather than `consented` where anything was refused, because an
+    agent who reads "consented" and collects everything has collected something
+    that was refused - and the granted_purposes column is the detail behind it.
+    """
+    if row["is_withdrawal"]:
+        return "withdrawn"
+    return "consented" if not row["refused_count"] else "partial"
+
+
+def _row_for(project: dict[str, Any], c: dict[str, Any]) -> list[Any]:
+    return [
+        project["project_name"],
+        str(project["project_uuid"]),
+        c["site_label"],
+        c["source_code"] or "",
+        str(c["link_uuid"]),
+        c["link_status"],
+        c["link_expires_at"].isoformat() if c["link_expires_at"] else "",
+        str(c["consent_uuid"]),
+        c["full_name"],
+        c["email"],
+        c["mobile"] or "",
+        c["organization_id"] or "",
+        c["person_type"] or "",
+        _consent_status(c),
+        "|".join(c["granted_purposes"] or []),
+        c["affirmative_action_at"].isoformat(),
+        c["notice_code"],
+        c["notice_version"],
+        c["notice_content_hash"],
     ]
 
-    pack = {
-        "generated_at": datetime.now(UTC).isoformat(),
-        "project": {
-            "uuid": str(project["project_uuid"]),
-            "name": project["project_name"],
-            "status": project["project_status"],
-        },
-        "site": {
-            "uuid": str(site["site_uuid"]),
-            "label": site["site_label"],
-            "location": site["location"],
-        },
-        "notice": {
-            "uuid": str(notice["notice_uuid"]),
-            "code": notice["notice_code"],
-            "version": notice["version"],
-            "published_at": notice["published_at"].isoformat() if notice["published_at"] else None,
-            "recipients_text": notice["recipients_text"],
-        },
-        "purposes": [
-            {
-                "uuid": str(p["purpose_uuid"]),
-                "code": p["purpose_code"],
-                "name": p["name"],
-                "lawful_basis": p["lawful_basis"],
-                "data_categories": p["data_categories"],
-                "is_mandatory": p["is_mandatory"],
-            }
-            for p in purposes
-        ],
-        "consent_links": [
-            {
-                "uuid": str(link_["link_uuid"]),
-                "expires_at": link_["expires_at"].isoformat(),
-                "uses_remaining": (
-                    None
-                    if link_["max_uses"] is None
-                    else max(0, link_["max_uses"] - link_["use_count"])
-                ),
-            }
-            for link_ in links
-        ],
-        "contains_personal_data": False,
-    }
-    return json.dumps(pack, indent=2, default=str), len(purposes), []
 
-
-async def _consented_list(
-    conn: Conn, project: dict[str, Any], site: dict[str, Any]
-) -> tuple[str, int, list[tuple[int, int]]]:
-    """Export B. Person rows, and therefore one export_line each."""
-    subjects = await repo.consented_subjects(
-        conn, project_id=project["project_id"], site_id=site["site_id"]
-    )
-
+def _write_csv(project: dict[str, Any], consents: list[dict[str, Any]]) -> str:
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(
-        [
-            "subject_uuid",
-            "full_name",
-            "email",
-            "mobile",
-            "organization_id",
-            "person_type",
-            "consent_uuid",
-            "consented_at",
-            "notice_code",
-            "notice_version",
-            "notice_content_sha256",
-            "granted_purposes",
-        ]
-    )
-    for s in subjects:
-        writer.writerow(
-            [
-                s["subject_uuid"],
-                s["full_name"],
-                s["email"],
-                s["mobile"] or "",
-                s["organization_id"] or "",
-                s["person_type"] or "",
-                s["consent_uuid"],
-                s["affirmative_action_at"].isoformat(),
-                s["notice_code"],
-                s["notice_version"],
-                s["notice_content_hash"],
-                "|".join(s["granted_purposes"] or []),
-            ]
-        )
+    writer.writerow(EXPORT_COLUMNS)
 
-    lines = [(s["auth_user_id"], s["consent_id"]) for s in subjects]
-    return buf.getvalue(), len(subjects), lines
+    if not consents:
+        # One row of context rather than a bare header. A file containing only
+        # column names reads as a broken export; this one says which project it
+        # is and that nobody has consented yet.
+        row: list[Any] = [""] * len(EXPORT_COLUMNS)
+        row[0] = project["project_name"]
+        row[1] = str(project["project_uuid"])
+        writer.writerow(row)
+        return buf.getvalue()
+
+    for c in consents:
+        writer.writerow(_row_for(project, c))
+    return buf.getvalue()
+
+
+async def _project_export(
+    conn: Conn, project: dict[str, Any], *, role: str, user_id: int
+) -> tuple[str, int, list[tuple[int, int]]]:
+    """The CSV, and one `export_line` per person disclosed.
+
+    The line rows are the disclosure record - who was named in what, and when.
+    Withdrawn people are in it too: their details left the building in this
+    file, and a record that omitted them would understate what was disclosed.
+    """
+    consents = await repo.project_consents(
+        conn, project_id=project["project_id"], role=role, user_id=user_id
+    )
+    payload = _write_csv(project, consents)
+    lines = [(c["auth_user_id"], c["consent_id"]) for c in consents]
+    return payload, len(consents), lines
 
 
 async def render(conn: Conn, export: dict[str, Any]) -> tuple[str, str, str]:
-    """Re-render a previously generated export for download.
+    """Re-render a generated export for download.
 
-    Regenerated from the same query rather than stored as a blob. The `file_hash`
-    recorded at generation is what proves the content has not drifted - a
-    mismatch is surfaced, not hidden, because a changed export is a changed
-    disclosure.
+    Rebuilt from the export's own `export_line` rows, not by re-running the
+    query. Re-running would return whatever matches *now* - a consent given
+    after the export would appear in a download of it - and it would rebuild
+    against whoever is downloading, which is how one collection owner's file
+    could come to hold another's people.
+
+    The recorded `file_hash` still proves the content has not drifted: a person
+    renamed since the export changes the rendered bytes and the comparison
+    catches it, which is the case the hash exists for.
     """
     project = await project_repo.by_uuid(conn, str(export["project_uuid"]), role="dpo", user_id=0)
-    site = await project_repo.site_by_uuid(conn, str(export["site_uuid"]), role="dpo", user_id=0)
-    if not project or not site:
+    if not project:
         raise NotFound("Export source")
 
-    if export["export_type"] == "collection_pack":
-        payload, _, _ = await _collection_pack(conn, project, site)
-        return payload, "application/json", "json"
-    payload, _, _ = await _consented_list(conn, project, site)
-    return payload, "text/csv", "csv"
+    # Older per-site exports predate this and were JSON or a different CSV.
+    # Re-rendering them through today's builder would produce a file that never
+    # existed, so they are served as what they are: a record that the export
+    # happened, with its rows.
+    consents = await repo.consents_in_export(conn, export["export_id"])
+    return _write_csv(project, consents), "text/csv", "csv"
 
 
 # ------------------------------------------------------------------- imports

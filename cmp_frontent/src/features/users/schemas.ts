@@ -29,6 +29,14 @@ export const userSchema = z.object({
   mobile: optional(mobile),
   organization_id: optional(organizationId),
   person_type: optional(z.string()),
+  // The data sources this person will be accountable for, assigned as part of
+  // creating them.
+  //
+  // Here because it is the moment somebody knows the answer. An account created
+  // without sources is a Data Collection Owner who owns nothing, appears in no
+  // routing, and is discovered to be idle later — so the question is asked while
+  // the person creating the account still has the context to answer it.
+  source_uuids: z.array(z.string()).default([]),
 });
 
 export type UserValues = z.infer<typeof userSchema>;

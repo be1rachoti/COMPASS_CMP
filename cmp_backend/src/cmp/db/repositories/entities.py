@@ -38,6 +38,13 @@ class _Spec:
 
     sql: str
     href: str | None = None
+    #: Where a *data principal* should be sent for the same thing, when there is
+    #: anywhere. Almost always None: the staff routes are consoles she has no
+    #: business on, and offering her one is how she ends up looking at the
+    #: account register. Defaulting to None means a new entity type is
+    #: unlinkable for her until somebody decides otherwise, which is the safe
+    #: direction for a default to fail in.
+    subject_href: str | None = None
     #: Shown next to the label so "Priya Menon" reads as an account rather than a
     #: data subject, and a consent record reads as a consent record.
     noun: str = ""
@@ -57,6 +64,9 @@ _SPECS: dict[str, _Spec] = {
                FROM notice n JOIN project p ON p.project_id = n.project_id
                WHERE n.notice_id = ANY(%s)""",
         href="/notices/{uuid}",
+        # A notice she was served is shown with the consent she gave against it.
+        # The staff notice page is an editor and refuses her.
+        subject_href="/my-consents",
         noun="Notice",
     ),
     "notice_language": _Spec(
@@ -138,6 +148,9 @@ _SPECS: dict[str, _Spec] = {
                JOIN project p   ON p.project_id = n.project_id
                WHERE ca.consent_id = ANY(%s)""",
         href="/consents/{uuid}",
+        # The staff register, versus her own record. Same event, two readers,
+        # two pages - and only one of them will open for her.
+        subject_href="/my-consents",
         noun="Consent record",
     ),
     "import_batch": _Spec(
@@ -165,6 +178,11 @@ _SPECS: dict[str, _Spec] = {
         sql="""SELECT id, uuid::text AS uuid, full_name AS label
                FROM auth_user WHERE id = ANY(%s)""",
         href="/users",
+        # Her own registration and sign-ins resolve to her own account. Before
+        # this they resolved to `/users` - the administrator's account register -
+        # for every reader, which is how a data principal following a
+        # notification about herself arrived at an admin screen.
+        subject_href="/profile",
         noun="Account",
     ),
     "person_type_history": _Spec(
@@ -179,11 +197,19 @@ _SPECS: dict[str, _Spec] = {
 }
 
 
-async def resolve(conn: Conn, refs: list[tuple[str, int]]) -> dict[tuple[str, int], dict[str, Any]]:
+async def resolve(
+    conn: Conn, refs: list[tuple[str, int]], *, for_subject: bool = False
+) -> dict[tuple[str, int], dict[str, Any]]:
     """Label a batch of `(entity_type, entity_id)` pairs.
 
     Unknown entity types and rows that no longer exist are simply absent from the
     result; the caller renders the raw `type#id` for those, which is still true.
+
+    `for_subject` picks the route the *reader* can actually open. The label and
+    the noun are the same for everybody - what happened is what happened - but
+    the link is not: a data principal following her own consent record belongs
+    on `/my-consents`, and sending her to the staff register was how she ended
+    up on a console that refuses her.
     """
     by_type: dict[str, set[int]] = {}
     for entity_type, entity_id in refs:
@@ -194,21 +220,30 @@ async def resolve(conn: Conn, refs: list[tuple[str, int]]) -> dict[tuple[str, in
     for entity_type, ids in by_type.items():
         spec = _SPECS[entity_type]
         rows = await fetch_all(conn, spec.sql, (list(ids),))
+        template = spec.subject_href if for_subject else spec.href
         for row in rows:
             uuid = row["uuid"]
             resolved[(entity_type, int(row["id"]))] = {
                 "entity_uuid": uuid,
                 "entity_label": row["label"],
                 "entity_noun": spec.noun,
-                "entity_href": spec.href.format(uuid=uuid) if spec.href else None,
+                "entity_href": template.format(uuid=uuid) if template else None,
             }
     return resolved
 
 
-async def attach(conn: Conn, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Enrich audit rows in place with their resolved entity, and return them."""
+async def attach(
+    conn: Conn, rows: list[dict[str, Any]], *, for_subject: bool = False
+) -> list[dict[str, Any]]:
+    """Enrich audit rows in place with their resolved entity, and return them.
+
+    Pass `for_subject=True` on anything a data principal reads. A keyword with a
+    safe default rather than a positional argument, so a caller who has not
+    thought about it gets the staff routes - which is what the staff endpoints
+    want - and the two endpoints she can reach say so explicitly.
+    """
     refs = [(str(r.get("entity_type") or ""), int(r.get("entity_id") or 0)) for r in rows]
-    resolved = await resolve(conn, refs)
+    resolved = await resolve(conn, refs, for_subject=for_subject)
     for row, ref in zip(rows, refs, strict=True):
         row.update(
             resolved.get(

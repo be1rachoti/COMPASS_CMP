@@ -21,6 +21,7 @@ import {
   Pencil,
   Plus,
   SlidersHorizontal,
+  StickyNote,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -63,6 +64,7 @@ import {
   Rule3Badge,
   Rule3OverrideDialog,
 } from "@/features/notices/components/rule3-override";
+import { NoticeText } from "@/features/notices/components/notice-text";
 import type { PurposeOnNotice } from "@/types";
 
 export default function NoticeDetailPage() {
@@ -96,6 +98,14 @@ export default function NoticeDetailPage() {
 
   const n = notice.data!;
   const isDpo = me?.role === "dpo";
+  // Assembly belongs to the author. The R&D User writes the notice because they
+  // are the one who knows what the study collects and why; asking the DPO to
+  // author it meant the DPO transcribing an email and then reviewing their own
+  // transcription, which is not a review.
+  //
+  // The server confines an R&D User to their own projects, so this flag being
+  // role-wide is not a widening: a notice they cannot reach does not load.
+  const canAuthor = isDpo || me?.role === "rnd_user";
   const isDraft = n.status === "draft" || n.status === "approved";
 
   async function onPublish() {
@@ -133,7 +143,7 @@ export default function NoticeDetailPage() {
         actions={
           <div className="flex items-center gap-2">
             <StatusBadge kind="notice" value={n.status} />
-            {isDpo && isDraft && (
+            {canAuthor && isDraft && (
               <Button variant="secondary" size="sm" onClick={() => setEditingNotice(true)}>
                 <Pencil className="size-4" />
                 Edit
@@ -145,7 +155,7 @@ export default function NoticeDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          {isDpo && isDraft && checklist.data && (
+          {canAuthor && isDraft && checklist.data && (
             <Card
               className={
                 checklist.data.publishable ? "border-success-border" : "border-warning-border"
@@ -240,6 +250,18 @@ export default function NoticeDetailPage() {
             </Card>
           )}
 
+          <NoticeText
+            languages={languages.data}
+            isLoading={languages.isLoading}
+            canEdit={canAuthor && isDraft}
+            onEdit={(lang) =>
+              setLanguageSheet({
+                code: lang.language_code,
+                approved: Boolean(lang.approved_at),
+              })
+            }
+          />
+
           <Card>
             <CardHeader className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -248,7 +270,7 @@ export default function NoticeDetailPage() {
                   Rule 3(b): what each purpose enables, itemised, with its retention.
                 </p>
               </div>
-              {isDpo && isDraft && (
+              {canAuthor && isDraft && (
                 <Button variant="secondary" size="sm" onClick={() => setEditingPurposes(true)}>
                   <Plus className="size-4" />
                   Manage
@@ -286,7 +308,7 @@ export default function NoticeDetailPage() {
                         {/* Draft only. A published notice is frozen and hashed;
                             changing what it says is a new version, not an edit,
                             and the API refuses it either way. */}
-                        {isDpo && isDraft && (
+                        {canAuthor && isDraft && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -339,13 +361,14 @@ export default function NoticeDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Globe className="size-4" aria-hidden="true" />
-                Language renditions
+                Legal approval, per language
               </CardTitle>
               <p className="mt-1 text-xs text-text-muted">
-                Approval is per language, not once per notice. A DPO who reads
-                English and approves eight renditions has approved one.
+                The register of sign-off — read the text itself above. Approval is per
+                language, not once per notice: a DPO who reads English and approves eight
+                renditions has approved one.
               </p>
-              {isDpo && isDraft && (
+              {canAuthor && isDraft && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -395,7 +418,7 @@ export default function NoticeDetailPage() {
                         </span>
                       )}
 
-                      {isDpo && isDraft && (
+                      {canAuthor && isDraft && (
                         <>
                           <Button
                             variant="ghost"
@@ -410,7 +433,12 @@ export default function NoticeDetailPage() {
                             <Pencil className="size-4" />
                             Edit
                           </Button>
-                          {!lang.approved_at && (
+                          {/* Approving stays with the DPO even though editing
+                              does not. An author who could sign off their own
+                              text would make the review a formality — and the
+                              approved hash is what a data subject's consent is
+                              matched against. */}
+                          {isDpo && !lang.approved_at && (
                             <Button
                               variant="secondary"
                               size="sm"
@@ -485,6 +513,19 @@ export default function NoticeDetailPage() {
                   </p>
                 </DescriptionItem>
                 <DescriptionItem term="DPO contact">{n.dpo_contact}</DescriptionItem>
+                <DescriptionItem term="Applies to">
+                  {n.applicable_to ? (
+                    humanise(n.applicable_to)
+                  ) : (
+                    // Named as blocking rather than left blank, because it is:
+                    // publication refuses without it, and "—" would read as a
+                    // field nobody needed to fill in.
+                    <span className="text-warning-text">
+                      Not set — publication is blocked until this says who the
+                      notice addresses
+                    </span>
+                  )}
+                </DescriptionItem>
                 <DescriptionItem term="Recipients">
                   {n.recipients_text ?? (
                     <span className="text-text-subtle">
@@ -495,6 +536,30 @@ export default function NoticeDetailPage() {
               </DescriptionList>
             </CardBody>
           </Card>
+
+          {/* Its own card rather than a row in the list above, because it is
+              addressed to a different reader. Everything above describes the
+              notice; this is an instruction to whoever collects against it, and
+              somebody scanning a description list will not read it as one.
+
+              Never served to a data principal: the public endpoints name their
+              columns explicitly, so it cannot reach them by being shown here. */}
+          {n.note && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <StickyNote className="size-4" aria-hidden="true" />
+                  For whoever collects against this notice
+                </CardTitle>
+              </CardHeader>
+              <CardBody>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{n.note}</p>
+                <p className="mt-2 text-xs text-text-subtle">
+                  Not part of the notice. The data principal never sees this.
+                </p>
+              </CardBody>
+            </Card>
+          )}
 
           {!isDraft && (
             <Alert tone="info">

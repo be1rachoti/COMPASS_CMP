@@ -9,16 +9,49 @@
  * added on the server cannot go unnoticed here.
  */
 
-export type Role = "dpo" | "dco" | "rnd_user" | "admin" | "data_subject";
+export type Role =
+  | "dpo"
+  | "dco"
+  /** Routes projects collected by a third party, and holds a DCO's authority
+   *  across all of them rather than over an assigned set. */
+  | "dco_admin"
+  /** R&D Collection Owner. A DCO's accountability, for collection the R&D team
+   *  does itself — where there is no external processor to route to. */
+  | "rco"
+  | "rnd_user"
+  | "admin"
+  | "data_subject";
+
+/** The roles that can be accountable for a data source.
+ *
+ *  A DPO or an administrator owning a rig would be a category error: ownership
+ *  is accountability for collection, so it belongs to the people who do it. */
+export const SOURCE_OWNING_ROLES = ["dco", "rco"] as const satisfies readonly Role[];
 export type PersonType = "external" | "employee" | "ex_employee" | "vendor";
 export type UserStatus = "pending" | "active" | "suspended" | "deactivated";
 
 export type ProjectStatus =
   | "in_draft"
+  /** Historical only. Merged into `in_draft`; nothing transitions to it, and
+   *  the value survives because status-history rows still name it. Kept in the
+   *  union so those rows type-check, and excluded from `PROJECT_STATUSES`. */
   | "under_process"
   | "pending_approval"
   | "approved"
   | "closed";
+
+/** The statuses a project can actually be in — what a filter should offer.
+ *
+ *  `under_process` is absent on purpose: offering a filter that can only ever
+ *  return nothing is worse than not offering it. */
+export const PROJECT_STATUSES = [
+  "in_draft",
+  "pending_approval",
+  "approved",
+  "closed",
+] as const satisfies readonly ProjectStatus[];
+
+export type NoticeAudience = "data_subject" | "employee" | "ex_employee" | "others";
 
 export type PurposeStatus = "draft" | "pending_approval" | "active" | "retired";
 export type NoticeStatus = "draft" | "approved" | "published" | "superseded";

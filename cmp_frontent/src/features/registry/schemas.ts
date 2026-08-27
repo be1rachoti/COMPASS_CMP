@@ -98,6 +98,15 @@ export const processorSchema = z.object({
   // under contract, which is the whole s.8(2) obligation.
   contract_ref: refText("A contract reference"),
   security_confirmed_at: pastOrToday("The security confirmation date"),
+  // Whether this is us collecting for ourselves. It decides where an approved
+  // project goes, so it is a question with consequences rather than a label —
+  // separate from `type`, which says what kind of thing a processor is and not
+  // whose it is. A lab can be either.
+  //
+  // Defaults to false, and that direction is deliberate: a third party's project
+  // is routed by a DCO Admin, an in-house one goes straight back to its author.
+  // An unanswered question should land on the path with the extra pair of eyes.
+  is_in_house: z.boolean().default(false),
 });
 
 export type ProcessorValues = z.infer<typeof processorSchema>;

@@ -2,7 +2,7 @@
  * Notices, their purposes and their language renditions.
  */
 
-import type { LanguageCode, NoticeStatus } from "@/types/enums";
+import type { LanguageCode, NoticeAudience, NoticeStatus } from "@/types/enums";
 import type { Timestamp, Uuid } from "@/types/primitives";
 import type { Purpose } from "@/types/registry";
 
@@ -18,6 +18,17 @@ export interface Notice {
   /** Generated from the project's sites at publication, never typed. */
   recipients_text: string | null;
   status: NoticeStatus;
+  /** Who this notice addresses. Exactly one, and required before publication —
+   *  a document written for employees and for the public at once is two
+   *  documents with different obligations wearing one name. */
+  applicable_to: NoticeAudience | null;
+  /** An instruction to whoever collects against this notice.
+   *
+   *  Shown to the DCO and never served to a data principal: it is a note to the
+   *  collector, not part of what the person being asked is given. The public
+   *  endpoints name their columns explicitly, so this cannot leak by being
+   *  added here. */
+  note: string | null;
   change_class: string | null;
   published_at: Timestamp | null;
   created_at: Timestamp;
@@ -29,7 +40,10 @@ export interface Notice {
 export interface NoticeLanguage {
   notice_language_uuid: Uuid;
   language_code: LanguageCode;
-  rendered_text?: string;
+  /** Exactly what a data principal reads. Always returned by the per-notice
+   *  languages endpoint — this is the notice, and a list of renditions without
+   *  it is a list of filenames. */
+  rendered_text: string;
   /** sha256 of the exact text served. Copied into each artefact at capture. */
   content_hash: string;
   approved_at: Timestamp | null;

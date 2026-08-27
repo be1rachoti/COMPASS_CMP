@@ -33,6 +33,12 @@ class UserRole(StrEnum):
     RND_USER = "rnd_user"
     ADMIN = "admin"
     DATA_SUBJECT = "data_subject"
+    #: Routes projects collected by a third party, and holds a DCO's authority
+    #: across all of them rather than over an assigned set.
+    DCO_ADMIN = "dco_admin"
+    #: R&D Collection Owner. A DCO's accountability, for collection the R&D team
+    #: does itself - where there is no external processor to route to.
+    RCO = "rco"
 
 
 class PersonType(StrEnum):
@@ -53,10 +59,15 @@ class UserStatus(StrEnum):
 
 # =============================================================== projects ====
 class ProjectStatus(StrEnum):
-    """Five states, walked in one direction.
+    """Four reachable states, walked in one direction.
 
     `CLOSED` is where the machine stops, not a fifth step — a project is not
     meant to end up there, it is where one goes when it is over.
+
+    `UNDER_PROCESS` is a fifth *label* and not a fifth state. It was merged into
+    `IN_DRAFT` and nothing transitions to it; the value survives because
+    `project_status_history` rows still name it. See
+    `cmp.domain.projects.state_machine`.
     """
 
     IN_DRAFT = "in_draft"
@@ -64,6 +75,20 @@ class ProjectStatus(StrEnum):
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     CLOSED = "closed"
+
+
+class ProcessorRequestStatus(StrEnum):
+    """Where a project-to-processor link stands.
+
+    Only `APPROVED` counts as one of the project's processors. A `PENDING` one
+    is a request and collects nothing; a `REJECTED` one is kept rather than
+    deleted, because "we asked and were told no" is a fact somebody will need
+    and a deleted row takes the reason with it.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class ApprovalType(StrEnum):
@@ -157,6 +182,22 @@ class RecordStatus(StrEnum):
 
 
 # ================================================================ notices ====
+class NoticeAudience(StrEnum):
+    """Who a notice addresses.
+
+    Deliberately separate from `PersonType`: that records what somebody *is*,
+    this records who a document *speaks to*, and the two answer different
+    questions even where the words overlap. A notice carries exactly one — a
+    document written for employees and for the public at once is two documents
+    with different obligations wearing one name.
+    """
+
+    DATA_SUBJECT = "data_subject"
+    EMPLOYEE = "employee"
+    EX_EMPLOYEE = "ex_employee"
+    OTHERS = "others"
+
+
 class NoticeStatus(StrEnum):
     """`SUPERSEDED` is not a failure — it means a newer version exists."""
 
@@ -226,8 +267,14 @@ class ConsentStatus(StrEnum):
 
 # =============================================================== exchange ====
 class ExportType(StrEnum):
+    #: Retained because `export_log` rows name them, and an export is a
+    #: disclosure record: renaming what it says was disclosed would falsify the
+    #: one table that exists to be trusted. Neither is reachable.
     COLLECTION_PACK = "collection_pack"
     CONSENTED_LIST = "consented_list"
+    #: The only reachable value. Last because `ALTER TYPE ... ADD VALUE` appends,
+    #: and the parity test holds this file to the database's own order.
+    PROJECT_EXPORT = "project_export"
 
 
 class BatchStatus(StrEnum):
@@ -291,6 +338,8 @@ BY_PG_TYPE: dict[str, type[StrEnum]] = {
     "lapse_behaviour": LapseBehaviour,
     "lawful_basis": LawfulBasis,
     "link_status": LinkStatus,
+    "processor_request_status": ProcessorRequestStatus,
+    "notice_audience": NoticeAudience,
     "notice_status": NoticeStatus,
     "person_type": PersonType,
     "processor_type": ProcessorType,

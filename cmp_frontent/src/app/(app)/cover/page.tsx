@@ -59,9 +59,14 @@ export default function CoverPage() {
   const oversight = me?.role === "dpo" || me?.role === "admin";
   const everyone = useAllDelegations(oversight);
 
-  // Cover applies to roles whose access is defined by *assignment*. An R&D
-  // User's rows are the ones they created, and nobody can cover authorship.
-  const canArrange = me?.role === "dpo" || me?.role === "dco";
+  // Cover applies to roles whose access is defined by *assignment* — every
+  // collection owner, not only the DCO. An R&D User's rows are the ones they
+  // created, and nobody can cover authorship.
+  const canArrange =
+    me?.role === "dpo" ||
+    me?.role === "dco" ||
+    me?.role === "rco" ||
+    me?.role === "dco_admin";
 
   return (
     <>

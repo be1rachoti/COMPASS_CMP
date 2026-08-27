@@ -144,25 +144,85 @@ export interface ApprovalListRow {
  */
 
 /**
- * A site, with who is accountable for it.
+ * A site, with the source that stands at it and who that source belongs to.
+ *
+ * The owner is read *through* the source and never recorded on the site. That
+ * indirection is the point: the same rig serving three projects has one owner,
+ * recorded once, and three copies cannot disagree.
  *
  * `is_primary` marks the site whose owner the project follows — the
- * earliest-registered active one that has an owner. Surfaced because a project
- * with three sites and three owners needs to say which of them is deciding,
- * and "the first one" is not something a reader can work out from a list.
+ * earliest-registered active one whose source has an owner. Surfaced because a
+ * project with three sites and three owners needs to say which of them is
+ * deciding, and "the first one" is not something a reader can work out from a
+ * list.
  */
 export interface SiteWithOwner extends Site {
+  source_uuid: Uuid | null;
+  source_code: string | null;
+  source_name: string | null;
+  is_in_house: boolean | null;
+  /** Who runs this site: the named override where there is one, otherwise the
+   *  owner of its data source. One field, because a screen that had to work
+   *  out which of two to show would eventually show the wrong one. */
   dco_uuid: Uuid | null;
   dco_name: string | null;
   dco_email: string | null;
+  dco_role: Role | null;
+  /** True when `dco_name` is a named exception rather than the source's owner.
+   *
+   *  Surfaced because the two look identical otherwise, and the difference
+   *  matters: an exception is somebody's decision about this project, and the
+   *  rig it runs on still belongs to somebody else. */
+  owner_overridden: boolean;
+  override_by_name: string | null;
+  override_at: Timestamp | null;
+  /** Who the site would fall back to. What the exception is an exception *to*. */
+  source_owner_name: string | null;
   is_primary: boolean;
 }
 
-/** What changed when a site was handed over. */
-export interface SiteDcoAssigned {
+/** What changed when a site's owner or its source was set. */
+export interface SiteSourceAssigned {
   ok: boolean;
-  /** True when this assignment moved the project to a different owner. The
+  /** True when this attachment moved the project to a different owner. The
    *  fact somebody needs before they close the dialog. */
   project_moved: boolean;
+  message: string;
+}
+
+/** Where a project-to-processor link stands.
+ *
+ *  Only `approved` counts as one of the project's processors: a `pending` one
+ *  is a request and collects nothing, and a `rejected` one is kept — with its
+ *  reason — because "we asked and were told no" is a fact somebody will need. */
+export type ProcessorRequestStatus = "pending" | "approved" | "rejected";
+
+/** A processor on a project's list, and where it stands. */
+export interface ProjectProcessor {
+  processor_uuid: Uuid;
+  legal_name: string;
+  type: string;
+  /** The processor's own lifecycle in the registry — active, suspended — as
+   *  distinct from `status`, which is where its link to *this project* stands. */
+  processor_status: RecordStatus;
+  status: ProcessorRequestStatus;
+  /** Drives the routing. A third party's project goes to a DCO Admin; an
+   *  in-house one goes back to the R&D owner to name an RCO. */
+  is_in_house: boolean;
+  /** Whether anything is collecting under it yet. An approved processor with no
+   *  site is what its collection owner is waiting on. */
+  has_site: boolean;
+  added_at: Timestamp;
+  requested_by_name: string | null;
+  decided_at: Timestamp | null;
+  decided_by_name: string | null;
+  decision_reason: string | null;
+}
+
+/** What happened to a request to add a collector. */
+export interface ProcessorDecision {
+  project_uuid: Uuid;
+  processor_uuid: Uuid;
+  status: ProcessorRequestStatus;
   message: string;
 }

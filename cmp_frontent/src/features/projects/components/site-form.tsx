@@ -1,21 +1,35 @@
 /**
- * Creating and editing a collection site.
+ * Adding a collection site.
  *
- * A site is where consent is actually gathered, so it is never deleted —
- * only deactivated. Every consent artefact points at the site it was
- * collected at, and a deleted row would orphan the evidence.
+ * A site is one **data source, deployed on this project** — so that is the only
+ * thing asked for. Everything else follows from it: the processor, because a
+ * source belongs to exactly one; the name, because a site has no name of its
+ * own; and who is accountable, because the source carries its owner.
+ *
+ * This replaced a form with a typed label, a processor dropdown and a source
+ * dropdown, which asked the same question three times and let the answers
+ * disagree. A site called "Pune lab", operated by one processor, fed by another
+ * processor's rig, is three claims and at most one of them is right.
+ *
+ * The list is filtered to the project's own processors. A source outside them
+ * would mean collecting through an organisation the DPO never reviewed, and the
+ * API refuses it — so it is absent here rather than offered and then rejected.
+ *
+ * A site is never deleted, only deactivated: every consent artefact points at
+ * the site it was collected at, and a deleted row would orphan the evidence.
  */
 "use client";
 
-import * as React from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Home, Info } from "lucide-react";
+
 import { FormError, useApiForm } from "@/components/forms";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Input, Select } from "@/components/ui/primitives";
 import { useCreateSite } from "@/features/projects";
-import { useProcessors, useSources } from "@/features/registry";
-import { useToast } from "@/providers";
+import { useProjectProcessors } from "@/features/projects/queries";
 import { siteSchema } from "@/features/projects/schemas";
+import { useSources } from "@/features/registry";
+import { useToast } from "@/providers";
 
 export function SiteForm({
   projectUuid,
@@ -30,41 +44,32 @@ export function SiteForm({
 }) {
   const toast = useToast();
   const create = useCreateSite(projectUuid);
-  const { data: processors } = useProcessors({ status: "active", limit: 100 });
 
-  const form = useApiForm(siteSchema, {
-    site_label: "",
-    location: "",
-    processor_uuid: "",
-    source_uuid: "",
-  });
-
-  // The cascade. Watching the processor rather than reading it on submit is what
-  // makes the second dropdown a consequence of the first instead of an unrelated
-  // list of every rig in the registry.
-  const processorUuid = form.watch("processor_uuid") ?? "";
-  const { data: sources, isFetching: sourcesLoading } = useSources({
+  const processors = useProjectProcessors(projectUuid);
+  const { data: sources, isLoading: sourcesLoading } = useSources({
     status: "active",
     limit: 100,
-    processor: processorUuid || undefined,
   });
 
-  // A source chosen under one processor is not valid under another, and the API
-  // refuses the pair. Clearing it here means the user sees that immediately
-  // rather than on submit.
-  React.useEffect(() => {
-    form.setValue("source_uuid", "");
-  }, [processorUuid, form]);
+  const form = useApiForm(siteSchema, { source_uuid: "", location: "" });
+
+  // Only what this project's processors operate. Computed rather than fetched
+  // per processor: a project can name several, and one request that filters is
+  // simpler than N that concatenate.
+  const named = new Set((processors.data ?? []).map((p) => p.processor_uuid));
+  const eligible = (sources?.items ?? []).filter(
+    (s) => s.processor_uuid && named.has(s.processor_uuid),
+  );
+
+  const chosen = eligible.find((s) => s.source_uuid === form.watch("source_uuid"));
 
   const onSubmit = form.submit(async (values) => {
     const result = await create.mutateAsync({
-      site_label: values.site_label,
+      source_uuid: values.source_uuid,
       location: values.location || null,
-      processor_uuid: values.processor_uuid || null,
-      source_uuid: values.source_uuid || null,
     });
     toast.success(
-      "Site added",
+      "Collection site added",
       result.material_change
         ? "This adds a recipient the published notice does not name. A new notice version is required before collecting here."
         : "It will appear in the notice's recipient list at publication.",
@@ -91,76 +96,66 @@ export function SiteForm({
 
       <div className="space-y-4">
         <Field
-          label="Site label"
-          hint="Appears in the notice's recipient list, so name it as a data subject would recognise it."
-          error={form.formState.errors.site_label?.message}
+          label="Data source"
+          hint="What will collect here. Its name becomes the site's, and whoever owns it picks up the work."
+          error={form.formState.errors.source_uuid?.message}
           required
         >
-          {(p) => <Input {...p} {...form.register("site_label")} placeholder="Pune Motion Lab" />}
-        </Field>
-
-        <Field label="Location">
           {(p) => (
-            <Input {...p} {...form.register("location")} placeholder="Pune, Maharashtra" />
+            <Select {...p} {...form.register("source_uuid")}>
+              <option value="">Choose a data source…</option>
+              {eligible.map((s) => (
+                <option key={s.source_uuid} value={s.source_uuid}>
+                  {s.name} · {s.processor_name}
+                  {s.owner_name ? ` · ${s.owner_name}` : " · unowned"}
+                </option>
+              ))}
+            </Select>
           )}
         </Field>
 
-        <div className="rounded-lg border border-border bg-bg-subtle p-3">
-          <p className="text-2xs font-semibold uppercase tracking-wider text-text-subtle">
-            Who runs it, and with what
-          </p>
+        {!sourcesLoading && !processors.isLoading && !eligible.length && (
+          <Alert tone="info" title="Nothing registered yet">
+            None of this project&rsquo;s processors have a data source registered. A
+            collection owner can add one under <strong>Data sources</strong>, and it will
+            appear here.
+          </Alert>
+        )}
 
-          <div className="mt-3 space-y-4">
-            <Field
-              label="Processor"
-              hint="The organisation operating this site. Leave blank if it is run internally."
-            >
-              {(p) => (
-                <Select {...p} {...form.register("processor_uuid")}>
-                  <option value="">Operated internally</option>
-                  {processors?.items.map((proc) => (
-                    <option key={proc.processor_uuid} value={proc.processor_uuid}>
-                      {proc.legal_name}
-                    </option>
-                  ))}
-                </Select>
+        {/* Said before saving, because attaching the first owned source hands
+            the project to somebody — and that somebody is not chosen on this
+            screen, they come with the rig. */}
+        {chosen && (
+          <Alert tone="info">
+            <p className="flex items-start gap-2">
+              {chosen.is_in_house ? (
+                <Home className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               )}
-            </Field>
+              <span>
+                {chosen.owner_name ? (
+                  <>
+                    <strong>{chosen.owner_name}</strong> owns {chosen.source_code} and will
+                    pick up this site.
+                  </>
+                ) : (
+                  <>
+                    Nobody owns {chosen.source_code} yet, so this site will have no owner
+                    until somebody is made accountable for it.
+                  </>
+                )}
+              </span>
+            </p>
+          </Alert>
+        )}
 
-            <Field
-              label="Data source"
-              hint={
-                processorUuid
-                  ? "The rig that will report from this site. Narrowed to what this processor operates."
-                  : "Pick a processor first — the list narrows to what they actually run."
-              }
-              error={form.formState.errors.source_uuid?.message}
-            >
-              {(p) => (
-                <Select
-                  {...p}
-                  {...form.register("source_uuid")}
-                  disabled={!processorUuid || sourcesLoading}
-                >
-                  <option value="">
-                    {!processorUuid
-                      ? "Choose a processor first"
-                      : sourcesLoading
-                        ? "Loading…"
-                        : (sources?.items.length ?? 0) === 0
-                          ? "This processor has no active source registered"
-                          : "Not decided yet"}
-                  </option>
-                  {sources?.items.map((src) => (
-                    <option key={src.source_uuid} value={src.source_uuid}>
-                      {src.name} ({src.source_code})
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          </div>
-        </div>
+        <Field
+          label="Location"
+          hint="Optional. The line a data principal reads in the notice's recipient list."
+        >
+          {(p) => <Input {...p} {...form.register("location")} placeholder="Pune, Maharashtra" />}
+        </Field>
       </div>
 
       <DialogFooter>
@@ -168,7 +163,7 @@ export function SiteForm({
           Cancel
         </Button>
         <Button type="submit" variant="primary" loading={create.isPending}>
-          Add site
+          Add collection site
         </Button>
       </DialogFooter>
     </form>

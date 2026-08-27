@@ -22,6 +22,7 @@ import {
   ScrollText,
   ShieldCheck,
   Upload,
+  Database,
   UserCog,
 } from "lucide-react";
 import Link from "next/link";
@@ -33,13 +34,16 @@ import { TransitionControls } from "@/features/projects/components/transition-co
 import {
   AgentForm,
   ApprovalForm,
+  AssignSiteDcoDialog,
   AssignSiteOwnerDialog,
+  OverrideBadge,
   ProjectForm,
+  ProjectProcessors,
   SiteForm,
   SiteOwner,
 } from "@/features/projects/components";
 import type { SiteWithOwner } from "@/types";
-import { ExportForm } from "@/features/exchange/components/forms";
+import { ExportForm } from "@/features/exchange/components/export-form";
 import { NoticeCopyForm, NoticeForm } from "@/features/notices/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
@@ -95,6 +99,7 @@ export default function ProjectDetailPage() {
   // Above the early returns: a hook after one runs in a different order on
   // the render that takes the branch, which React refuses.
   const [assigning, setAssigning] = React.useState<SiteWithOwner | null>(null);
+  const [namingDco, setNamingDco] = React.useState<SiteWithOwner | null>(null);
 
   if (project.isLoading) return <DetailSkeleton />;
 
@@ -118,18 +123,44 @@ export default function ProjectDetailPage() {
   // The R&D User is included because they are the one who knows where collection
   // will physically happen. Leaving it to the DPO meant the DPO inventing a site
   // to get past their own publication screen.
-  const canAddSite = isDpo || me?.role === "dco" || isOwner;
+  // The R&D User knows where collection will happen; the DCO Admin and the RCO
+  // register the sites they are about to route. Widened on the API first, and
+  // this is the button that had to follow it — without it the DCO Admin's whole
+  // job was unreachable from the project they were meant to do it on.
+  const canAddSite =
+    isDpo ||
+    me?.role === "dco" ||
+    me?.role === "dco_admin" ||
+    me?.role === "rco" ||
+    isOwner;
   // Minting a Field Agent link stays with the DPO and DCO: it is a credential
   // for the collection floor, not a project-setup step.
-  const canManageSites = isDpo || me?.role === "dco";
-  // Mirrors the server's rule in `projects.service.add_approval`. Approvals
-  // evidence a project moving through review, so they belong to the window
-  // when it is in review - before that there is nothing to approve, after it
-  // the decision is already recorded.
+  // Whoever is accountable for collection at a site. Three roles now, not one:
+  // an RCO was refused a consent link for their own lab because this list — and
+  // the API gate behind it — predated them. Which *site* each may act on is
+  // enforced server-side by the site scope, so this only decides whether the
+  // control is worth rendering.
+  const isCollectionOwner =
+    me?.role === "dco" || me?.role === "rco" || me?.role === "dco_admin";
+  const canManageSites = isDpo || isCollectionOwner;
+  // Mirrors the server's rule in `projects.service.add_approval`. Draft is
+  // where an approval is attached now: submitting for review *requires* one, so
+  // it has to be possible before submitting. Still open while pending, because
+  // a DPO asking for a second sign-off should not need the project sent back.
   const canUploadApproval =
-    p.project_status === "under_process" || p.project_status === "pending_approval";
-  const canAssignSiteOwner = isDpo || me?.role === "admin";
-  const canExport = isDpo || me?.role === "dco";
+    p.project_status === "in_draft" ||
+    p.project_status === "under_process" ||
+    p.project_status === "pending_approval";
+  // Attaching a source is the routing step. The DCO Admin does it on
+  // third-party collection, the R&D owner on in-house; the DPO and an
+  // administrator can correct either. A DCO is deliberately absent - reassigning
+  // their own sites would let them hand themselves somebody else's project.
+  const canAssignSiteOwner =
+    isDpo || me?.role === "admin" || me?.role === "dco_admin" || isOwner;
+  const canExport = isDpo || isCollectionOwner;
+  // The R&D User writes the notice now: they are the one who knows what the
+  // study collects and why. The DPO keeps the same control and reviews it.
+  const canAuthorNotice = isDpo || isOwner;
   const noticePublished = Boolean(p.current_notice_uuid);
 
   return (
@@ -152,7 +183,7 @@ export default function ProjectDetailPage() {
                 Edit
               </Button>
             )}
-            {isDpo && (
+            {canAuthorNotice && (
               <>
                 <Button variant="secondary" size="sm" onClick={() => setSheet({ kind: "notice" })}>
                   <ScrollText className="size-4" />
@@ -172,9 +203,9 @@ export default function ProjectDetailPage() {
               </>
             )}
             {/* Gated on the project's state as well as the role. The API
-                refuses an approval outside under_process and pending_approval,
-                and offering a control that 409s teaches people to distrust the
-                ones that work. */}
+                refuses an approval once the project is approved, and offering a
+                control that 409s teaches people to distrust the ones that
+                work. */}
             {isOwner && canUploadApproval && (
               <Button variant="secondary" size="sm" onClick={() => setSheet({ kind: "approval" })}>
                 <FileCheck className="size-4" />
@@ -203,7 +234,18 @@ export default function ProjectDetailPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
-          <TransitionControls projectUuid={uuid} currentStatus={p.project_status} />
+          <TransitionControls
+            projectUuid={uuid}
+            currentStatus={p.project_status}
+            noticeUuid={p.current_notice_uuid ?? notices.data?.[0]?.notice_uuid}
+          />
+
+          <ProjectProcessors
+            projectUuid={uuid}
+            projectStatus={p.project_status}
+            canRequest={isOwner}
+            canDecide={isDpo}
+          />
 
           <Card>
             <CardHeader>
@@ -285,8 +327,12 @@ export default function ProjectDetailPage() {
                       {/* Who is accountable, and whether this is the site the
                           project follows. A project spanning three campuses run
                           by three people needs to say which one decides. */}
-                      <div className="mt-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <SiteOwner site={site} />
+                        {/* Says the owner is a named exception rather than the
+                            source's. Without it the two read identically and
+                            nobody can tell the rig has a different owner. */}
+                        <OverrideBadge site={site} />
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -296,19 +342,39 @@ export default function ProjectDetailPage() {
                         </span>
                       )}
                       <StatusBadge kind="record" value={site.status} />
-                      {/* DPO and administrator only. A DCO reassigning their own
-                          sites could hand themselves somebody else's project —
-                          the API refuses it, and offering the control anyway
-                          would just produce a 403 on click. */}
+                      {/* Two controls, deliberately worded apart. "Data source"
+                          attaches the rig and picks its owner; "Who runs it"
+                          names somebody for this site alone and leaves the rig
+                          where it is. Somebody reaching for the wrong one would
+                          move three studies believing they had moved one.
+
+                          A DCO holds neither: reassigning their own sites would
+                          let them hand themselves somebody else's project. */}
                       {canAssignSiteOwner && site.status === "active" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setAssigning(site)}
-                        >
-                          <UserCog className="size-4" />
-                          {site.dco_name ? "Reassign" : "Assign"}
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAssigning(site)}
+                          >
+                            <Database className="size-4" />
+                            {site.source_uuid ? "Change source" : "Attach source"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setNamingDco(site)}
+                            disabled={!site.source_uuid}
+                            title={
+                              site.source_uuid
+                                ? undefined
+                                : "Attach a data source first — that picks the owner"
+                            }
+                          >
+                            <UserCog className="size-4" />
+                            Who runs it
+                          </Button>
+                        </>
                       )}
                       {/* A link may only exist for an approved project, so the
                           control is absent until it is. */}
@@ -536,7 +602,12 @@ export default function ProjectDetailPage() {
           {sheet?.kind === "agent" && <AgentForm siteUuid={sheet.siteUuid} onDone={close} />}
         </DialogContent>
       </Dialog>
-      <AssignSiteOwnerDialog site={assigning} onClose={() => setAssigning(null)} />
+      <AssignSiteOwnerDialog
+        site={assigning}
+        projectUuid={uuid}
+        onClose={() => setAssigning(null)}
+      />
+      <AssignSiteDcoDialog site={namingDco} onClose={() => setNamingDco(null)} />
     </>
   );
 }
@@ -563,7 +634,7 @@ function DetailSkeleton() {
 /**
  * The approvals already on this project, and their proof files.
  *
- * The R&D User uploads a security approval to unlock `under_process ->
+ * The R&D User uploads a security approval to unlock `in_draft ->
  * pending_approval`, and until now the page gave them an upload button and no
  * way to see what they had already uploaded — so the honest reading of the
  * screen was "nothing is here", which sent people uploading it twice.

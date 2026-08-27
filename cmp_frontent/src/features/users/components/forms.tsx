@@ -25,6 +25,7 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { Alert, Button, Field, Input, Select, Textarea } from "@/components/ui/primitives";
 import { useChangeRole, useCreateUser, useUpdateUser } from "@/features/users";
 import { useEnums } from "@/features/meta";
+import { useSources } from "@/features/registry";
 import type { User } from "@/types";
 import { useToast } from "@/providers";
 import {
@@ -48,7 +49,28 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
     mobile: user?.mobile ?? "",
     organization_id: user?.organization_id ?? "",
     person_type: user?.person_type ?? "employee",
+    source_uuids: [] as string[],
   });
+
+  const role = form.watch("role");
+  const sourceUuids = form.watch("source_uuids") ?? [];
+  // Only the roles that can hold a source, and only the sources that match:
+  // a DCO takes a third party's collection, an RCO takes the R&D team's own.
+  // Both rules are the server's; mirroring them here means the wrong option is
+  // absent rather than offered and then refused.
+  const ownsSources = role === "dco" || role === "rco";
+  const { data: sources } = useSources(
+    ownsSources ? { status: "active", in_house: role === "rco", limit: 100 } : { limit: 1 },
+  );
+  const eligible = ownsSources ? (sources?.items ?? []) : [];
+
+  // A role change clears the selection rather than carrying it: the sources a
+  // DCO could own are exactly the ones an RCO could not.
+  React.useEffect(() => {
+    if (sourceUuids.length && !ownsSources) {
+      form.setValue("source_uuids", [], { shouldDirty: true });
+    }
+  }, [ownsSources, sourceUuids.length, form]);
 
   const busy = create.isPending || update.isPending;
 
@@ -59,6 +81,7 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
       mobile: values.mobile || null,
       organization_id: values.organization_id || null,
       person_type: values.person_type || null,
+      source_uuids: values.source_uuids ?? [],
     };
 
     if (user) {
@@ -74,7 +97,10 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
       await create.mutateAsync(payload);
       toast.success(
         "Account created",
-        "It starts pending. The user activates it through the password reset flow.",
+        payload.source_uuids.length
+          ? `It starts pending, with ${payload.source_uuids.length} data source(s) attached. ` +
+            "The user activates it through the password reset flow."
+          : "It starts pending. The user activates it through the password reset flow.",
       );
     }
     onDone();
@@ -156,6 +182,58 @@ export function UserForm({ user, onDone }: { user?: User; onDone: () => void }) 
             {(p) => <Input {...p} {...form.register("organization_id")} />}
           </Field>
         </div>
+
+        {/* Creation only. Moving a source between people afterwards belongs on
+            the source, where the consequence is visible: it moves every project
+            collecting from it, and that count is worth showing. */}
+        {!user && ownsSources && (
+          <fieldset>
+            <legend className="text-sm font-medium">Data sources</legend>
+            <p className="mb-2 mt-0.5 text-xs text-text-muted">
+              What this person will be accountable for. Projects collecting from any of these
+              will appear in their list. Optional — sources can be attached later.
+            </p>
+
+            {!eligible.length ? (
+              <Alert tone="info">
+                No unassigned{" "}
+                {role === "rco" ? "in-house" : "third-party"} data sources are registered yet.
+              </Alert>
+            ) : (
+              <div className="grid max-h-52 gap-1.5 overflow-y-auto sm:grid-cols-2">
+                {eligible.map((s) => (
+                  <label
+                    key={s.source_uuid}
+                    className="grid cursor-pointer grid-cols-[auto_1fr] items-center gap-x-2 gap-y-0.5 rounded-lg border border-border px-2.5 py-2 text-sm transition-colors hover:bg-bg-inset has-[:checked]:border-accent-border has-[:checked]:bg-accent-subtle"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={sourceUuids.includes(s.source_uuid)}
+                      onChange={() =>
+                        form.setValue(
+                          "source_uuids",
+                          sourceUuids.includes(s.source_uuid)
+                            ? sourceUuids.filter((u) => u !== s.source_uuid)
+                            : [...sourceUuids, s.source_uuid],
+                          { shouldDirty: true },
+                        )
+                      }
+                      className="size-4 rounded border-border-strong accent-[var(--accent)]"
+                    />
+                    <span className="block min-w-0 truncate font-medium">{s.name}</span>
+                    <span className="col-start-2 truncate font-mono text-2xs text-text-subtle">
+                      {s.source_code}
+                      {/* Naming the current owner rather than hiding the row:
+                          reassigning is legitimate, and a source that silently
+                          vanished from the list would look like a bug. */}
+                      {s.owner_name ? ` · currently ${s.owner_name}` : ""}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </fieldset>
+        )}
       </div>
 
       <DialogFooter>

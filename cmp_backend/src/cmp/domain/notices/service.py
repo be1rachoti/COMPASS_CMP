@@ -104,6 +104,8 @@ async def create(
     exercise_rights_url: str,
     board_complaint_url: str,
     dpo_contact: str,
+    applicable_to: str | None = None,
+    note: str | None = None,
     notice_code: str | None = None,
     change_class: str | None = None,
     language_code: str | None = None,
@@ -132,6 +134,8 @@ async def create(
         exercise_rights_url=exercise_rights_url,
         board_complaint_url=board_complaint_url,
         dpo_contact=dpo_contact,
+        applicable_to=applicable_to,
+        note=note,
         change_class=change_class,
     )
     await audit.record(
@@ -194,6 +198,11 @@ async def copy_from(
         exercise_rights_url=source["exercise_rights_url"],
         board_complaint_url=source["board_complaint_url"],
         dpo_contact=source["dpo_contact"],
+        # The audience and the collector's note travel with the copy: a notice
+        # copied for a second project addresses the same people and needs the
+        # same instruction, and re-answering both from memory is how they drift.
+        applicable_to=source["applicable_to"],
+        note=source["note"],
         change_class=None,
     )
 
@@ -375,6 +384,9 @@ async def checklist(conn: Conn, notice_id: int) -> dict[str, Any]:
 
     purposes = await repo.purposes_of(conn, notice_id)
     languages = await repo.languages_of(conn, notice_id)
+    # Deliberately unfiltered. The recipient list is what a data principal
+    # reads, and one that named only the places its reader runs would be a
+    # notice that lied to her about where her data goes.
     sites = await project_repo.list_sites(conn, notice["project_id"])
 
     blocking: list[str] = []
@@ -387,6 +399,12 @@ async def checklist(conn: Conn, notice_id: int) -> dict[str, Any]:
     ):
         if not (notice.get(field) or "").strip():
             blocking.append(label)
+
+    # Who the notice addresses. Not one of the URL checks above because it is a
+    # choice from a fixed set rather than free text, so "empty after trimming"
+    # is not the question - it is either answered or it is not.
+    if not notice.get("applicable_to"):
+        blocking.append("applicable_to is not set - the notice does not say who it addresses")
 
     if not purposes:
         blocking.append("no purposes attached")

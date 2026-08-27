@@ -14,7 +14,6 @@
  *  with a humanised key - a new backend count appears rather than disappearing. */
 export const COUNT_LABELS: Record<string, string> = {
   in_draft: "In draft",
-  under_process: "Under process",
   pending_approval: "Pending approval",
   approved: "Approved",
   closed: "Closed",
@@ -26,6 +25,10 @@ export const COUNT_LABELS: Record<string, string> = {
   unapproved_languages: "Unapproved translations",
   access_denials_7d: "Access denials (7d)",
   approved_projects: "Approved projects",
+  pending_processors: "Collectors awaiting your decision",
+  projects: "Third-party projects",
+  sites_awaiting_source: "Sites awaiting a data source",
+  sources_without_owner: "Sources with nobody accountable",
   active_links: "Active links",
   consents: "Consents",
   exports: "Exports",
@@ -50,11 +53,15 @@ export const COUNT_LABELS: Record<string, string> = {
 export const COUNT_LINKS: Record<string, string> = {
   total: "/projects",
   in_draft: "/projects?status=in_draft",
-  under_process: "/projects?status=under_process",
   pending_approval: "/projects?status=pending_approval",
   approved: "/projects?status=approved",
   closed: "/projects?status=closed",
   approved_projects: "/projects?status=approved",
+  projects: "/projects",
+  sites_awaiting_source: "/sites",
+  // Straight to the queue rather than the whole registry: the count is the
+  // number of rows behind this filter, so the link should land on them.
+  sources_without_owner: "/sources?unowned=1",
 
   draft_notices: "/notices?status=draft",
   unapproved_languages: "/notices",
@@ -85,5 +92,11 @@ export const WARNING_COUNTS = new Set([
   "access_denials_7d",
 ]);
 
-/** The project state machine, in the order it is walked. */
-export const LIFECYCLE = ["in_draft", "under_process", "pending_approval", "approved", "closed"] as const;
+/** The project state machine, in the order it is walked.
+ *
+ *  Four steps, not five. `under_process` sat between the first two and belonged
+ *  to the DPO, which put a second person's step in the middle of one person's
+ *  work; assembly is one state now. The value still exists for history rows and
+ *  is deliberately absent here — a progress bar with a step nothing can reach
+ *  shows every project as permanently stalled at it. */
+export const LIFECYCLE = ["in_draft", "pending_approval", "approved", "closed"] as const;

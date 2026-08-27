@@ -479,7 +479,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/users/assignable-dcos": {
+    "/users/collection-owners": {
         parameters: {
             query?: never;
             header?: never;
@@ -487,18 +487,19 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Active DCOs, for nomination
-         * @description The nomination lookup.
+         * Active DCOs and RCOs, for source ownership
+         * @description The ownership lookup.
          *
-         *     Registering a project requires nominating a Data Collection Owner, and the
-         *     R&D User doing the registering cannot read the account register. Without this
-         *     the requirement is unsatisfiable: the form has nothing to offer.
+         *     Making somebody accountable for a data source means picking a person, and
+         *     the people who do it - a DCO Admin routing a project, an R&D owner naming an
+         *     RCO - cannot read the account register. Without this the operation is
+         *     unsatisfiable: the form has nothing to offer.
          *
-         *     Scoped to exactly what the choice needs - active DCOs, three fields - so it
-         *     is not a way around the register's own restrictions. Declared before
+         *     Scoped to exactly what the choice needs - active DCOs and RCOs, four fields -
+         *     so it is not a way around the register's own restrictions. Declared before
          *     `/users/{uuid}` so the literal path is matched first.
          */
-        get: operations["assignable_dcos_users_assignable_dcos_get"];
+        get: operations["collection_owners_users_collection_owners_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1181,6 +1182,16 @@ export interface paths {
          *     That filter is what makes the collection-site form a cascade rather than two
          *     unrelated dropdowns: pick who operates the site, then pick from what they
          *     actually run, instead of scrolling a registry-wide list and hoping.
+         *
+         *     `unmapped` is the opposite question: which sources has nobody said who
+         *     operates. A source the organisation runs itself legitimately has no
+         *     processor - requiring one would mean inventing a processor record for your
+         *     own organisation - so this is a gap to review rather than an error to
+         *     prevent, and a filter is how a reviewable gap is surfaced.
+         *
+         *     `unowned` is the DCO Admin's and the R&D owner's working list: sources nobody
+         *     is accountable for yet. `in_house` splits the registry the way routing does -
+         *     what we collect ourselves from what somebody else collects for us.
          */
         get: operations["list_sources_sources_get"];
         put?: never;
@@ -1190,6 +1201,13 @@ export interface paths {
          *
          *     Without it, a nightly identity sync will overwrite a value corrected under a
          *     rights request and nobody will notice.
+         *
+         *     **A collection owner may only register under their own kind of processor.**
+         *     A DCO is accountable for what a third party collects and an RCO for what the
+         *     R&D team collects itself, so a DCO registering an in-house rig - or the
+         *     reverse - would be creating a source they could never be given. Everyone
+         *     else (DPO, administrator, DCO Admin, R&D User) is unconstrained: they are
+         *     registering on somebody's behalf rather than for themselves.
          */
         post: operations["create_source_sources_post"];
         delete?: never;
@@ -1209,6 +1227,41 @@ export interface paths {
         get: operations["get_source_sources__source_uuid__get"];
         /** Update Source */
         put: operations["update_source_sources__source_uuid__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sources/{source_uuid}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign the person accountable for a source
+         * @description Hand a source to a DCO or an RCO. Every project using it follows.
+         *
+         *     This is where a person is named, and it is the *only* place. Everywhere else
+         *     - registering a site, routing an approved project - picks a source, and the
+         *     owner comes with it. One answer to "who is accountable for CIT", recorded
+         *     once, rather than one per project that used it.
+         *
+         *     Which role fits which source is checked, because the distinction carries
+         *     meaning: an RCO is accountable for collection the R&D team does itself, a
+         *     DCO for a third party's. Assigning an RCO to a third-party source would
+         *     record that in-house staff are answerable for work they are not doing.
+         *
+         *     `trg_source_owner` re-derives the routing of every project deploying this
+         *     source, so this one write is the whole change. `projects_moved` says how many
+         *     that was - reassigning a rig used by three studies moves three studies, and
+         *     somebody should see that before they close the dialog.
+         */
+        put: operations["assign_source_owner_sources__source_uuid__owner_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1397,17 +1450,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/projects/{project_uuid}/dco": {
+    "/projects/{project_uuid}/processors": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Assign Dco */
-        post: operations["assign_dco_projects__project_uuid__dco_post"];
+        /** List Project Processors */
+        get: operations["list_project_processors_projects__project_uuid__processors_get"];
+        /**
+         * Draft only
+         * @description Change who will collect, while the project is still in draft.
+         *
+         *     The R&D User alone, and their own projects alone - row scope sees to the
+         *     second half. Naming the collectors is the initiator's decision because it is
+         *     the one they are answerable for: the study is theirs, and the partners are
+         *     the ones they arranged. A DPO who disagreed with the choice returns the
+         *     project to draft and says so, which leaves a record; editing it silently
+         *     would not.
+         *
+         *     Nobody may after approval: the processors are what the DPO reviewed and what
+         *     the routing was decided from, so changing them would re-point an approved
+         *     project at a collector nobody approved.
+         */
+        put: operations["set_project_processors_projects__project_uuid__processors_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1501,6 +1569,16 @@ export interface paths {
          *     the study, they know which lab or clinic is running it, and which processor
          *     operates it. Leaving this to the DPO meant the DPO inventing a site to get
          *     past their own publication screen.
+         *
+         *     The DCO Admin and the RCO are included because registering the site is the
+         *     first half of the job they exist to do. Routing an approved project means
+         *     saying where collection happens and what stands there, and a role that could
+         *     attach a source but not create the site it attaches to would be able to
+         *     finish the work only if somebody else had started it.
+         *
+         *     What it takes is a data source, chosen from those registered under the
+         *     project's processors - not a name typed by hand. A site is where one of
+         *     those sources stands.
          */
         post: operations["add_site_projects__project_uuid__sites_post"];
         delete?: never;
@@ -1527,7 +1605,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/sites/{site_uuid}/dco": {
+    "/sites/{site_uuid}/source": {
         parameters: {
             query?: never;
             header?: never;
@@ -1536,24 +1614,66 @@ export interface paths {
         };
         get?: never;
         /**
-         * Assign the DCO accountable for a site
-         * @description Hand a site to a DCO. The project follows.
+         * Attach the data source that stands here
+         * @description Attach a data source to a site. The project follows.
          *
-         *     Sites are how a DCO's workload is defined — the campuses, rigs and partner
-         *     locations they are accountable for — and a project is work that happens at
-         *     some of them. So this is the only place project ownership is decided:
-         *     `trg_site_owner` re-derives `project.dco_user_id` from the primary site, and
-         *     the project moves into the new owner's list on commit.
+         *     This is the routing step, and it is deliberately not a way to name a person.
+         *     A source carries its own owner, so choosing CIT for a site is choosing
+         *     whoever runs CIT - the two cannot disagree, because there is only one of
+         *     them. `trg_site_owner` re-derives `project.dco_user_id` from the primary
+         *     site on commit, and the project appears in that owner's list.
          *
-         *     Restricted to DPO and administrator. A DCO reassigning their own sites could
-         *     hand themselves somebody else's project, or drop one they no longer want.
+         *     Who may call it follows the same split as the routing itself:
+         *
+         *     * a **DCO Admin** on a project collected by a third party - that queue is
+         *       their job;
+         *     * the **R&D owner** on one collected in-house, which is where an approved
+         *       project goes back to them to name the sources and an RCO;
+         *     * a **DPO** or **administrator** anywhere, for correction.
+         *
+         *     A DCO is not on that list. Reassigning their own sites would let them hand
+         *     themselves somebody else's project, or drop one they no longer want.
          *
          *     The response reports the routing consequence rather than leaving the caller
-         *     to infer it: `project_moved` is true when this assignment changed who owns
-         *     the project, which is the fact somebody needs to see before they close the
-         *     dialog.
+         *     to infer it: `project_moved` is true when this changed who owns the project,
+         *     which is the fact somebody needs to see before they close the dialog.
          */
-        put: operations["assign_site_dco_sites__site_uuid__dco_put"];
+        put: operations["assign_site_source_sites__site_uuid__source_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sites/{site_uuid}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Name who runs this site, overriding its source
+         * @description Override the owner a site inherits from its data source.
+         *
+         *     Attaching a source picks the owner automatically and that is right almost
+         *     every time. This is the exception: cover, a handover, a partner who insists
+         *     on a named contact. Several sites on one project can each name a different
+         *     person.
+         *
+         *     **It does not move the source.** The rig keeps its owner and every other
+         *     project collecting from it is untouched — which is the whole reason this is
+         *     a separate operation rather than a shortcut into `PUT /sources/{uuid}/owner`.
+         *     That endpoint moves everybody; this one moves one site.
+         *
+         *     Who may call it follows the routing: a **DCO Admin** on third-party
+         *     collection, the **R&D owner** on in-house, and a **DPO** or **administrator**
+         *     anywhere. A DCO is absent for the same reason as everywhere else — naming
+         *     themselves on somebody else's site is exactly what this must not enable.
+         */
+        put: operations["assign_site_owner_sites__site_uuid__owner_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1778,7 +1898,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Languages */
+        /**
+         * List Languages
+         * @description Every rendition of this notice, with its text.
+         *
+         *     The text is included, and its absence was a real gap rather than a saving:
+         *     without it there was nowhere in the console to *read* a notice, and the
+         *     editor opened blank because the form had nothing to prefill from. Both
+         *     symptoms, one missing column.
+         *
+         *     It is not sensitive - this is the text a data principal is shown, and anyone
+         *     reaching this endpoint can already read the notice. Volume is not a concern
+         *     either: a notice has at most a handful of renditions, and they are the
+         *     content of the page asking for them.
+         */
         get: operations["list_languages_notices__notice_uuid__languages_get"];
         put?: never;
         /** Add Language */
@@ -2912,6 +3045,27 @@ export interface components {
             batch_uuid: string;
         };
         /**
+         * CollectionOwner
+         * @description Somebody who can be accountable for a data source.
+         *
+         *     Four fields, and the role is one of them because it constrains the choice
+         *     rather than merely describing it: an RCO owns in-house collection and a DCO
+         *     a third party's, so the two are not interchangeable.
+         */
+        CollectionOwner: {
+            /**
+             * Uuid
+             * Format: uuid
+             */
+            uuid: string;
+            /** Full Name */
+            full_name: string;
+            /** Email */
+            email: string;
+            /** Role */
+            role: string;
+        };
+        /**
          * ConsentArtefactOut
          * @description One consent record, in full.
          *
@@ -3214,6 +3368,8 @@ export interface components {
             organization_id?: string | null;
             /** Person Type */
             person_type?: string | null;
+            /** Source Uuids */
+            source_uuids?: string[];
         };
         /** Dashboard */
         Dashboard: {
@@ -3231,14 +3387,6 @@ export interface components {
             recent: {
                 [key: string]: unknown;
             }[];
-        };
-        /** DcoAssign */
-        DcoAssign: {
-            /**
-             * Dco User Uuid
-             * Format: uuid
-             */
-            dco_user_uuid: string;
         };
         /** DelegationGranted */
         DelegationGranted: {
@@ -3693,18 +3841,18 @@ export interface components {
             /** Code */
             code: string;
         };
-        /** Nominee */
-        Nominee: {
-            /**
-             * Uuid
-             * Format: uuid
-             */
-            uuid: string;
-            /** Full Name */
-            full_name: string;
-            /** Email */
-            email: string;
-        };
+        /**
+         * NoticeAudience
+         * @description Who a notice addresses.
+         *
+         *     Deliberately separate from `PersonType`: that records what somebody *is*,
+         *     this records who a document *speaks to*, and the two answer different
+         *     questions even where the words overlap. A notice carries exactly one — a
+         *     document written for employees and for the public at once is two documents
+         *     with different obligations wearing one name.
+         * @enum {string}
+         */
+        NoticeAudience: "data_subject" | "employee" | "ex_employee" | "others";
         /**
          * NoticeCopyIn
          * @description Start this project's notice from one that already exists.
@@ -3729,6 +3877,9 @@ export interface components {
             board_complaint_url: string;
             /** Dpo Contact */
             dpo_contact: string;
+            applicable_to?: components["schemas"]["NoticeAudience"] | null;
+            /** Note */
+            note?: string | null;
             /** Notice Code */
             notice_code?: string | null;
             /** Change Class */
@@ -3800,6 +3951,10 @@ export interface components {
             recipients_text: string | null;
             /** Status */
             status: string;
+            /** Note */
+            note?: string | null;
+            /** Applicable To */
+            applicable_to?: string | null;
             /** Change Class */
             change_class: string | null;
             /** Published At */
@@ -3829,6 +3984,9 @@ export interface components {
             board_complaint_url?: string | null;
             /** Dpo Contact */
             dpo_contact?: string | null;
+            applicable_to?: components["schemas"]["NoticeAudience"] | null;
+            /** Note */
+            note?: string | null;
             /** Change Class */
             change_class?: string | null;
         };
@@ -4112,6 +4270,11 @@ export interface components {
              * Format: date
              */
             security_confirmed_at: string;
+            /**
+             * Is In House
+             * @default false
+             */
+            is_in_house: boolean;
         };
         /** ProcessorOut */
         ProcessorOut: {
@@ -4133,6 +4296,11 @@ export interface components {
             security_confirmed_at: string;
             /** Status */
             status: string;
+            /**
+             * Is In House
+             * @default false
+             */
+            is_in_house: boolean;
             /** Created At */
             created_at: unknown;
         };
@@ -4145,17 +4313,19 @@ export interface components {
             /** Security Confirmed At */
             security_confirmed_at?: string | null;
         };
+        /** ProcessorsIn */
+        ProcessorsIn: {
+            /** Processor Uuids */
+            processor_uuids: string[];
+        };
         /** ProjectIn */
         ProjectIn: {
             /** Project Name */
             project_name: string;
             /** Description */
             description: string;
-            /**
-             * Dco User Uuid
-             * Format: uuid
-             */
-            dco_user_uuid: string;
+            /** Processor Uuids */
+            processor_uuids: string[];
             /** Internal Project Name */
             internal_project_name?: string | null;
             /** Requesting Team */
@@ -4488,29 +4658,27 @@ export interface components {
             current: boolean;
         };
         /**
-         * SiteDcoAssign
-         * @description Who is accountable for this site.
+         * SiteIn
+         * @description A collection site is the deployment of one data source on one project.
          *
-         *     `null` un-assigns, which is a real operation: a DCO leaves and their sites
-         *     have to sit unowned until somebody takes them, rather than being silently
-         *     parked with whoever happens to run the next one.
+         *     That is why the data source is the only required field. It decides the
+         *     processor (a source belongs to one), the label (a site has no name of its
+         *     own - it *is* that source, standing somewhere), and who is accountable (the
+         *     source carries its owner). Asking for those separately invited them to
+         *     disagree with each other, and a site whose label said one thing while its
+         *     source said another had two answers to one question.
+         *
+         *     The source has to be one of the project's own processors'. Anything else
+         *     would mean collecting through an organisation the DPO did not review.
          */
-        SiteDcoAssign: {
-            /** Dco User Uuid */
-            dco_user_uuid?: string | null;
-        };
-        /** SiteIn */
         SiteIn: {
-            /** Site Label */
-            site_label: string;
+            /**
+             * Source Uuid
+             * Format: uuid
+             */
+            source_uuid: string;
             /** Location */
             location?: string | null;
-            /** Processor Uuid */
-            processor_uuid?: string | null;
-            /** Source Uuid */
-            source_uuid?: string | null;
-            /** Dco User Uuid */
-            dco_user_uuid?: string | null;
         };
         /** SiteListRow */
         SiteListRow: {
@@ -4545,6 +4713,30 @@ export interface components {
             processor_name?: string | null;
             /** Active Links */
             active_links: number;
+        };
+        /**
+         * SiteOwnerAssign
+         * @description Who runs this site on this project, when it is not the source's owner.
+         *
+         *     `null` clears the exception and the site goes back to whoever owns its data
+         *     source — the usual way an override ends, because it was cover and the cover
+         *     finished.
+         */
+        SiteOwnerAssign: {
+            /** Owner User Uuid */
+            owner_user_uuid?: string | null;
+        };
+        /**
+         * SiteSourceAssign
+         * @description Which data source stands at this site.
+         *
+         *     `null` detaches, which is a real operation: a site between sources is
+         *     honestly unassigned, and leaving the previous one attached would say
+         *     collection is happening somewhere it is not.
+         */
+        SiteSourceAssign: {
+            /** Source Uuid */
+            source_uuid?: string | null;
         };
         /** SiteUpdate */
         SiteUpdate: {
@@ -4593,8 +4785,37 @@ export interface components {
             is_authoritative_for: string[];
             /** Status */
             status: string;
+            /** Processor Uuid */
+            processor_uuid?: string | null;
+            /** Processor Name */
+            processor_name?: string | null;
+            /** Is In House */
+            is_in_house?: boolean | null;
+            /**
+             * Has Owner
+             * @default false
+             */
+            has_owner: boolean;
+            /** Owner User Uuid */
+            owner_user_uuid?: string | null;
+            /** Owner Name */
+            owner_name?: string | null;
+            /** Owner Role */
+            owner_role?: string | null;
             /** Created At */
             created_at: unknown;
+        };
+        /**
+         * SourceOwnerIn
+         * @description Who is accountable for collection from this source.
+         *
+         *     `null` takes it back, which is a real operation: somebody leaves and their
+         *     sources have to sit unowned until they are picked up, rather than being
+         *     silently parked with whoever happens to be assigned next.
+         */
+        SourceOwnerIn: {
+            /** Owner User Uuid */
+            owner_user_uuid?: string | null;
         };
         /** SourceUpdate */
         SourceUpdate: {
@@ -4655,6 +4876,8 @@ export interface components {
             created_at: unknown;
             /** Updated At */
             updated_at: unknown;
+            /** Sources */
+            sources?: string[] | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -5427,7 +5650,7 @@ export interface operations {
             };
         };
     };
-    assignable_dcos_users_assignable_dcos_get: {
+    collection_owners_users_collection_owners_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5442,7 +5665,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Nominee"][];
+                    "application/json": components["schemas"]["CollectionOwner"][];
                 };
             };
         };
@@ -6725,6 +6948,9 @@ export interface operations {
                 status?: string | null;
                 source_role?: string | null;
                 processor?: string | null;
+                unmapped?: boolean;
+                unowned?: boolean;
+                in_house?: boolean | null;
                 q?: string | null;
                 limit?: number | null;
                 cursor?: string | null;
@@ -6842,6 +7068,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_source_owner_sources__source_uuid__owner_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SourceOwnerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -7260,7 +7523,40 @@ export interface operations {
             };
         };
     };
-    assign_dco_projects__project_uuid__dco_post: {
+    list_project_processors_projects__project_uuid__processors_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_project_processors_projects__project_uuid__processors_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -7271,7 +7567,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DcoAssign"];
+                "application/json": components["schemas"]["ProcessorsIn"];
             };
         };
         responses: {
@@ -7281,7 +7577,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Acknowledged"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
                 };
             };
             /** @description Validation Error */
@@ -7606,7 +7904,7 @@ export interface operations {
             };
         };
     };
-    assign_site_dco_sites__site_uuid__dco_put: {
+    assign_site_source_sites__site_uuid__source_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -7617,7 +7915,44 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SiteDcoAssign"];
+                "application/json": components["schemas"]["SiteSourceAssign"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_site_owner_sites__site_uuid__owner_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteOwnerAssign"];
             };
         };
         responses: {

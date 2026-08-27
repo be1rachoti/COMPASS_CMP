@@ -37,7 +37,10 @@ async def create_export(
     conn: Conn,
     *,
     project_id: int,
-    site_id: int,
+    #: None on a project export, which covers every site the exporter could see.
+    #: The rows name their own site; the column is kept for the per-site exports
+    #: that predate 0010.
+    site_id: int | None,
     export_type: str,
     exported_by: int,
     row_count: int,
@@ -85,7 +88,7 @@ async def export_by_uuid(
                u.uuid AS exported_by_uuid, u.full_name AS exported_by_name
         FROM export_log e
         JOIN project p      ON p.project_id = e.project_id
-        JOIN project_site s ON s.site_id = e.site_id
+        LEFT JOIN project_site s ON s.site_id = e.site_id
         JOIN auth_user u    ON u.id = e.exported_by
         WHERE e.export_uuid = %s AND ({pred})
         """,
@@ -101,7 +104,7 @@ async def exports_for_project(conn: Conn, project_id: int) -> list[Row]:
                s.site_uuid, s.site_label,
                u.uuid AS exported_by_uuid, u.full_name AS exported_by_name
         FROM export_log e
-        JOIN project_site s ON s.site_id = e.site_id
+        LEFT JOIN project_site s ON s.site_id = e.site_id
         JOIN auth_user u    ON u.id = e.exported_by
         WHERE e.project_id = %s
         ORDER BY e.exported_at DESC
@@ -139,12 +142,127 @@ async def disclosures_for_user(conn: Conn, user_id: int) -> list[Row]:
         FROM export_line el
         JOIN export_log e   ON e.export_id = el.export_id
         JOIN project p      ON p.project_id = e.project_id
-        JOIN project_site s ON s.site_id = e.site_id
+        LEFT JOIN project_site s ON s.site_id = e.site_id
         LEFT JOIN processor pr ON pr.processor_id = s.processor_id
         WHERE el.auth_user_id = %s
         ORDER BY e.exported_at DESC
         """,
         (user_id,),
+    )
+
+
+async def project_consents(
+    conn: Conn, *, project_id: int, role: Role | str, user_id: int
+) -> list[Row]:
+    """Every consent on a project this caller may see, one row each.
+
+    **Scoped by site, not by project.** A project with two collection owners is
+    one project and two sets of people; the DCO running a partner campus gets
+    their campus's consents and not the in-house lab's. The same predicate the
+    site and consent screens use, so an export cannot become a way around a
+    boundary the console enforces.
+
+    **Consented, partial and withdrawn - not declined.** An agent working from a
+    consented-only list cannot tell "withdrew, stop collecting" from "never
+    turned up", and the first is the case they must act on. Somebody who only
+    ever declined is excluded: exporting the details of a person who refused, to
+    the people who wanted to collect from them, is the thing consent is meant to
+    prevent.
+
+    A withdrawal artefact may carry no grants at all, so the grant join is a
+    LEFT one - an inner join silently dropped exactly the rows that matter most.
+    """
+    from cmp.db.repositories.projects import site_scope_predicate
+
+    pred, params = site_scope_predicate(role, user_id, alias="s")
+
+    return await fetch_all(
+        conn,
+        f"""
+        SELECT u.id AS auth_user_id, u.uuid AS subject_uuid, u.full_name, u.email,
+               u.mobile, u.organization_id, u.person_type,
+               ca.consent_id, ca.consent_uuid, ca.affirmative_action_at,
+               ca.is_withdrawal, ca.notice_content_hash,
+               n.notice_uuid, n.notice_code, n.version AS notice_version,
+               s.site_uuid, s.site_label, ds.source_code,
+               cl.link_uuid, cl.status AS link_status, cl.expires_at AS link_expires_at,
+               count(*) FILTER (WHERE g.granted)     AS granted_count,
+               count(*) FILTER (WHERE NOT g.granted) AS refused_count,
+               array_agg(p.purpose_code ORDER BY p.purpose_code)
+                 FILTER (WHERE g.granted) AS granted_purposes
+          FROM v_current_consent ca
+          JOIN notice n        ON n.notice_id = ca.notice_id
+          JOIN consent_link cl ON cl.link_id = ca.link_id
+          JOIN project_site s  ON s.site_id = cl.site_id
+          LEFT JOIN data_source ds ON ds.source_id = s.source_id
+          JOIN auth_user u     ON u.id = ca.auth_user_id
+          LEFT JOIN consent_purpose_grant g ON g.consent_id = ca.consent_id
+          LEFT JOIN purpose p  ON p.purpose_id = g.purpose_id
+         WHERE n.project_id = %s AND ({pred})
+         GROUP BY u.id, u.uuid, u.full_name, u.email, u.mobile, u.organization_id,
+                  u.person_type, ca.consent_id, ca.consent_uuid,
+                  ca.affirmative_action_at, ca.is_withdrawal, ca.notice_content_hash,
+                  n.notice_uuid, n.notice_code, n.version,
+                  s.site_uuid, s.site_label, ds.source_code,
+                  cl.link_uuid, cl.status, cl.expires_at
+        HAVING ca.is_withdrawal OR count(*) FILTER (WHERE g.granted) > 0
+         ORDER BY u.full_name, ca.affirmative_action_at
+        """,
+        [project_id, *params],
+    )
+
+
+async def consents_in_export(conn: Conn, export_id: int) -> list[Row]:
+    """The exact rows an export disclosed, for re-rendering it.
+
+    Read from `export_line` rather than by re-running `project_consents`. Two
+    reasons, and the second is the important one.
+
+    A download has to be the file that was generated. Re-running the query would
+    return whatever matches *now*, so a consent given after the export would
+    appear in a download of it - and `file_hash` would flag a mismatch on a file
+    nobody had changed.
+
+    And the scope is already baked in. `export_line` holds what this exporter
+    disclosed; re-running as somebody else would rebuild it against their scope,
+    which is how a DCO's download could come to contain another site's people.
+
+    Content drift is still surfaced: a person renamed after the export changes
+    the rendered bytes and the hash comparison catches it, which is the case the
+    hash exists for.
+    """
+    return await fetch_all(
+        conn,
+        """
+        SELECT u.uuid AS subject_uuid, u.full_name, u.email, u.mobile,
+               u.organization_id, u.person_type,
+               ca.consent_uuid, ca.affirmative_action_at, ca.is_withdrawal,
+               ca.notice_content_hash,
+               n.notice_code, n.version AS notice_version,
+               s.site_label, ds.source_code,
+               cl.link_uuid, cl.status AS link_status, cl.expires_at AS link_expires_at,
+               count(*) FILTER (WHERE g.granted)     AS granted_count,
+               count(*) FILTER (WHERE NOT g.granted) AS refused_count,
+               array_agg(p.purpose_code ORDER BY p.purpose_code)
+                 FILTER (WHERE g.granted) AS granted_purposes
+          FROM export_line el
+          JOIN consent_artefact ca ON ca.consent_id = el.consent_id
+          JOIN auth_user u     ON u.id = el.auth_user_id
+          JOIN notice n        ON n.notice_id = ca.notice_id
+          JOIN consent_link cl ON cl.link_id = ca.link_id
+          JOIN project_site s  ON s.site_id = cl.site_id
+          LEFT JOIN data_source ds ON ds.source_id = s.source_id
+          LEFT JOIN consent_purpose_grant g ON g.consent_id = ca.consent_id
+          LEFT JOIN purpose p  ON p.purpose_id = g.purpose_id
+         WHERE el.export_id = %s
+         GROUP BY u.uuid, u.full_name, u.email, u.mobile, u.organization_id,
+                  u.person_type, ca.consent_uuid, ca.affirmative_action_at,
+                  ca.is_withdrawal, ca.notice_content_hash, n.notice_code, n.version,
+                  s.site_label, ds.source_code,
+                  cl.link_uuid, cl.status, cl.expires_at
+         ORDER BY u.full_name, ca.affirmative_action_at
+        """,
+        (export_id,),
     )
 
 
@@ -606,7 +724,7 @@ async def list_all_exports(
     base = """
         FROM export_log e
         JOIN project p      ON p.project_id = e.project_id
-        JOIN project_site s ON s.site_id = e.site_id
+        LEFT JOIN project_site s ON s.site_id = e.site_id
         JOIN auth_user u    ON u.id = e.exported_by
     """
     rows = await fetch_all(

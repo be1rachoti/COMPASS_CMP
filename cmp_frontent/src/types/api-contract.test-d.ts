@@ -54,6 +54,7 @@ import type {
   Me,
   NoticeListRow,
   Notice,
+  DataSource,
   Processor,
   Project,
   Purpose,
@@ -93,6 +94,10 @@ export type _NoticeListRow = Covers<"NoticeListRow", Schemas["NoticeListRow"], N
 
 export type _Purpose = Covers<"Purpose", Schemas["PurposeOut"], Purpose>;
 export type _Processor = Covers<"Processor", Schemas["ProcessorOut"], Processor>;
+// Absent until a field the API returns silently stopped arriving: the column
+// was joined and selected, the response model did not declare it, and the
+// payload lost it with nothing failing anywhere.
+export type _DataSource = Covers<"DataSource", Schemas["SourceOut"], DataSource>;
 
 export type _ConsentRow = Covers<"ConsentRow", Schemas["ConsentRow"], ConsentRow>;
 export type _ConsentListRow = Covers<"ConsentListRow", Schemas["ConsentListRow"], ConsentListRow>;
@@ -126,6 +131,7 @@ const _contractHolds: {
   NoticeListRow: _NoticeListRow;
   Purpose: _Purpose;
   Processor: _Processor;
+  DataSource: _DataSource;
   ConsentRow: _ConsentRow;
   ConsentListRow: _ConsentListRow;
   LinkListRow: _LinkListRow;
@@ -145,6 +151,7 @@ const _contractHolds: {
   NoticeListRow: true,
   Purpose: true,
   Processor: true,
+  DataSource: true,
   ConsentRow: true,
   ConsentListRow: true,
   LinkListRow: true,

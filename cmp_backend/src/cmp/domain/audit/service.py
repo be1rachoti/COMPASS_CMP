@@ -109,12 +109,22 @@ class Event:
     SOURCE_CREATED = "source.created"
     SOURCE_UPDATED = "source.updated"
     SOURCE_SUSPENDED = "source.suspended"
+    #: A source changed hands. Every project deploying it follows, so this is
+    #: one event with many consequences - the count is in the detail.
+    SOURCE_OWNER_ASSIGNED = "source.owner_assigned"
 
     # projects
     PROJECT_CREATED = "project.created"
     PROJECT_UPDATED = "project.updated"
     PROJECT_TRANSITIONED = "project.transitioned"
     PROJECT_DCO_ASSIGNED = "project.dco_assigned"
+    #: A collector was proposed for a project the DPO had already approved,
+    #: and the two answers that can follow. Separate events rather than one
+    #: with a flag, because "who approved this partner and when" is a question
+    #: asked on its own and an event type is what makes it answerable.
+    PROCESSOR_REQUESTED = "project.processor_requested"
+    PROCESSOR_APPROVED = "project.processor_approved"
+    PROCESSOR_REJECTED = "project.processor_rejected"
     PROJECT_CLOSED = "project.closed"
     APPROVAL_UPLOADED = "approval.uploaded"
     APPROVAL_PROOF_DOWNLOADED = "approval.proof_downloaded"
@@ -122,8 +132,13 @@ class Event:
     SITE_UPDATED = "site.updated"
     SITE_DEACTIVATED = "site.deactivated"
     SITE_AGENT_ASSIGNED = "site.agent_assigned"
-    #: A site changed hands. The project follows it, so this event is the record
-    #: of *why* a project appeared in somebody else's list.
+    #: A data source was attached to a site, or detached from it. The source
+    #: carries its owner and the project follows the primary site, so this event
+    #: is the record of *why* a project appeared in somebody else's list.
+    #:
+    #: The string still says `dco_assigned` because rows written before sources
+    #: carried ownership say that, and renaming it would split one history into
+    #: two names for the same thing.
     SITE_DCO_ASSIGNED = "site.dco_assigned"
     #: A capability link was replaced: the old one revoked, a new one minted.
     #: Two events would be truthful and would separate a single decision.

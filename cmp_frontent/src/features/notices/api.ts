@@ -68,6 +68,11 @@ export interface NoticeInput {
    * asking them to guess.
    */
   notice_code?: string | null;
+  /** Who this notice addresses. Required before publication, checked there
+   *  rather than here so a notice can be started before it is settled. */
+  applicable_to?: string | null;
+  /** A note to whoever collects against it. Never served to a data principal. */
+  note?: string | null;
   change_class?: string | null;
   /** The text a data principal actually reads, saved with the notice in one step. */
   rendered_text?: string | null;

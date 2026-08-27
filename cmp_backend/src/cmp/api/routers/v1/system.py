@@ -180,7 +180,8 @@ _ENUMS: dict[str, list[str]] = {
     "approval_type": ["security", "legal", "other"],
     "link_status": ["active", "expired", "revoked"],
     "action_type": ["checkbox_click", "button_press", "signature"],
-    "export_type": ["collection_pack", "consented_list"],
+    # One kind, so the picker that used to offer a choice has nothing to ask.
+    "export_type": ["project_export"],
     "source_role": ["identity", "collection", "both"],
     "exchange_mode": ["file_export", "file_import", "manual_upload", "api"],
     "batch_status": ["received", "validating", "accepted", "partial", "rejected"],
@@ -207,6 +208,8 @@ _LABELS: dict[str, str] = {
     "s7_a_voluntary": "s.7(a) - voluntarily provided",
     "s7_i_employment": "s.7(i) - employment purposes",
     "s7_other": "s.7 - other specified use",
+    "project_export": "Project export (CSV, includes personal data)",
+    # Historical, and still rendered wherever an old export_log row is shown.
     "collection_pack": "Collection pack (no personal data)",
     "consented_list": "Consented list",
     "file_export": "File export",

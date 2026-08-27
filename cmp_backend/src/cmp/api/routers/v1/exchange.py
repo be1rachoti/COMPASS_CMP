@@ -12,7 +12,6 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
-from pydantic import Field
 
 from cmp.api.dependencies import CurrentUser, Paging, RequireResource, reject_unknown_filters
 from cmp.core.config import settings
@@ -25,7 +24,7 @@ from cmp.db.repositories import projects as project_repo
 from cmp.domain.audit import service as audit
 from cmp.domain.audit.service import Event
 from cmp.domain.exchange import service as service
-from cmp.schemas.common import Out, Page, Schema
+from cmp.schemas.common import Out, Page
 
 router = APIRouter(tags=["exchange"])
 
@@ -36,11 +35,6 @@ ExportActor = Annotated[Any, Depends(RequireResource("export", write=True))]
 ExportReader = Annotated[Any, Depends(RequireResource("export"))]
 ImportActor = Annotated[Any, Depends(RequireResource("import", write=True))]
 CollectionReader = Annotated[Any, Depends(RequireResource("collection"))]
-
-
-class ExportRequest(Schema):
-    type: str = Field(description="collection_pack or consented_list")
-    site: UUID
 
 
 class ExportOut(Out):
@@ -177,19 +171,22 @@ async def list_all_collections(
     response_model=ExportOut,
     status_code=status.HTTP_201_CREATED,
 )
-async def generate_export(
-    project_uuid: UUID, body: ExportRequest, principal: ExportActor
-) -> dict[str, Any]:
-    """Export A carries no person rows, which is what makes it safe to email.
-    Export B carries person rows, and therefore writes one export_line each."""
-    if body.type not in ("collection_pack", "consented_list"):
-        raise ValidationFailed("type must be collection_pack or consented_list", field="type")
+async def generate_export(project_uuid: UUID, principal: ExportActor) -> dict[str, Any]:
+    """One CSV for the project, and it carries person rows.
+
+    No body: there is one kind of export and it covers the project. What the
+    caller may see decides the contents - a collection owner gets the people who
+    consented at the sites they run, a DPO gets all of them - so the same
+    request returns a different, correct file to each of them.
+
+    Every person named writes an `export_line`. That is the disclosure record,
+    and it is why generating and downloading are separate: re-downloading must
+    not claim a second disclosure.
+    """
     async with transaction() as conn:
         return await service.generate(
             conn,
             project_uuid=str(project_uuid),
-            site_uuid=str(body.site),
-            export_type=body.type,
             actor_id=principal.user_id,
             role=principal.role,
         )

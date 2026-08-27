@@ -1,7 +1,13 @@
-"""Notices - 13 endpoints. DPO authors, all roles read.
+"""Notices - the R&D User authors, the DPO reviews and may correct, all roles read.
 
 `/checklist` returns exactly what is blocking publication, so the UI shows a list
-rather than a failed submit.
+rather than a failed submit. It is readable by anybody who can read the notice,
+because the person being blocked is usually the author, not the DPO.
+
+Assembly belongs to the author - the notice, its purposes, its languages, and
+any Rule 3 narrowing. Approving a language and publishing stay with the DPO:
+those are the review, and an author who could sign off their own text would make
+the review a formality.
 
 `/publish` runs in one transaction: validate all Rule 3 elements, generate
 `recipients_text` from the project's sites, compute `content_hash` per language,
@@ -23,6 +29,7 @@ from cmp.api.dependencies import (
     RequireResource,
     reject_unknown_filters,
 )
+from cmp.core.enums import NoticeAudience
 from cmp.core.errors import Conflict, NotFound, ValidationFailed
 from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
@@ -37,6 +44,13 @@ router = APIRouter(tags=["notices"])
 
 NoticeReader = Annotated[Any, Depends(RequireResource("notice"))]
 
+#: Who may write a notice: the DPO anywhere, the R&D User on their own projects.
+#:
+#: The R&D User writes it because they are the one who knows what the study
+#: collects and why. Asking the DPO to author it meant the DPO transcribing an
+#: email and then reviewing their own transcription, which is not a review.
+NoticeAuthor = Annotated[Any, Depends(RequireResource("notice", write=True))]
+
 
 class NoticeOut(Out):
     notice_uuid: UUID
@@ -48,6 +62,11 @@ class NoticeOut(Out):
     dpo_contact: str
     recipients_text: str | None
     status: str
+    #: An instruction to whoever collects against this notice. Shown to the DCO
+    #: and never served to a data principal - it is a note to the collector, not
+    #: part of the notice they are given.
+    note: str | None = None
+    applicable_to: str | None = None
     change_class: str | None
     published_at: datetime | None
     created_at: datetime
@@ -63,6 +82,16 @@ class NoticeIn(Schema):
         description="The Data Protection Board portal, NOT the internal grievance form"
     )
     dpo_contact: Annotated[str, Field(min_length=3, max_length=255)]
+    #: Who this notice addresses. One value, not a set: a notice written for
+    #: employees and for the public at once is two notices with different
+    #: obligations wearing one name, and the reader can only be one of them.
+    #:
+    #: Required before publication, which is checked by the state machine rather
+    #: than here - a notice can be started before that is settled.
+    applicable_to: NoticeAudience | None = None
+    #: A note to whoever collects against this notice. Never served to a data
+    #: principal.
+    note: Annotated[str | None, Field(default=None, max_length=4000)] = None
     #: Optional. Generated from the project name and the year when omitted - a
     #: DPO cannot see the other projects' codes, so asking them to invent a
     #: unique one is asking them to guess.
@@ -86,6 +115,8 @@ class NoticeUpdate(Schema):
     exercise_rights_url: HttpUrl | None = None
     board_complaint_url: HttpUrl | None = None
     dpo_contact: Annotated[str | None, Field(default=None, max_length=255)] = None
+    applicable_to: NoticeAudience | None = None
+    note: Annotated[str | None, Field(default=None, max_length=4000)] = None
     change_class: str | None = None
 
 
@@ -204,7 +235,7 @@ async def list_notices(project_uuid: UUID, principal: NoticeReader) -> list[dict
     status_code=status.HTTP_201_CREATED,
 )
 async def create_notice(
-    project_uuid: UUID, body: NoticeIn, principal: RequireDPO
+    project_uuid: UUID, body: NoticeIn, principal: NoticeAuthor
 ) -> dict[str, Any]:
     async with transaction() as conn:
         return await service.create(
@@ -217,6 +248,8 @@ async def create_notice(
             exercise_rights_url=body.exercise_rights_url,
             board_complaint_url=body.board_complaint_url,
             dpo_contact=body.dpo_contact,
+            applicable_to=body.applicable_to or None,
+            note=body.note,
             change_class=body.change_class,
             language_code=body.language_code,
             rendered_text=body.rendered_text,
@@ -230,7 +263,7 @@ async def create_notice(
     summary="Copy an existing notice into this project",
 )
 async def copy_notice(
-    project_uuid: UUID, body: NoticeCopyIn, principal: RequireDPO
+    project_uuid: UUID, body: NoticeCopyIn, principal: NoticeAuthor
 ) -> dict[str, Any]:
     """A copy, never a shared row.
 
@@ -265,7 +298,7 @@ async def get_notice(notice_uuid: UUID, principal: NoticeReader) -> dict[str, An
 
 @router.put("/notices/{notice_uuid}", response_model=NoticeOut, summary="Draft only")
 async def update_notice(
-    notice_uuid: UUID, body: NoticeUpdate, principal: RequireDPO
+    notice_uuid: UUID, body: NoticeUpdate, principal: NoticeAuthor
 ) -> dict[str, Any]:
     async with transaction() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
@@ -276,6 +309,8 @@ async def update_notice(
             exercise_rights_url=body.exercise_rights_url,
             board_complaint_url=body.board_complaint_url,
             dpo_contact=body.dpo_contact,
+            applicable_to=body.applicable_to or None,
+            note=body.note,
             change_class=body.change_class,
         )
 
@@ -296,7 +331,7 @@ async def list_notice_purposes(notice_uuid: UUID, principal: NoticeReader) -> li
 
 @router.post("/notices/{notice_uuid}/purposes", status_code=status.HTTP_201_CREATED)
 async def attach_purpose(
-    notice_uuid: UUID, body: AttachPurpose, principal: RequireDPO
+    notice_uuid: UUID, body: AttachPurpose, principal: NoticeAuthor
 ) -> dict[str, Any]:
     """`is_mandatory = true` should be rare and should make you uncomfortable.
 
@@ -344,7 +379,7 @@ async def override_purpose(
     notice_uuid: UUID,
     purpose_uuid: UUID,
     body: PurposeOverride,
-    principal: RequireDPO,
+    principal: NoticeAuthor,
 ) -> dict[str, Any]:
     """State Rule 3(b) more narrowly on this notice than the purpose does.
 
@@ -436,7 +471,7 @@ async def override_purpose(
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Draft only",
 )
-async def detach_purpose(notice_uuid: UUID, purpose_uuid: UUID, principal: RequireDPO) -> None:
+async def detach_purpose(notice_uuid: UUID, purpose_uuid: UUID, principal: NoticeAuthor) -> None:
     async with transaction() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         await service.detach_purpose(
@@ -446,16 +481,28 @@ async def detach_purpose(notice_uuid: UUID, purpose_uuid: UUID, principal: Requi
 
 @router.get("/notices/{notice_uuid}/languages")
 async def list_languages(notice_uuid: UUID, principal: NoticeReader) -> list[dict[str, Any]]:
+    """Every rendition of this notice, with its text.
+
+    The text is included, and its absence was a real gap rather than a saving:
+    without it there was nowhere in the console to *read* a notice, and the
+    editor opened blank because the form had nothing to prefill from. Both
+    symptoms, one missing column.
+
+    It is not sensitive - this is the text a data principal is shown, and anyone
+    reaching this endpoint can already read the notice. Volume is not a concern
+    either: a notice has at most a handful of renditions, and they are the
+    content of the page asking for them.
+    """
     async with connection() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
-        return await repo.languages_of(conn, notice["notice_id"])
+        return await repo.languages_of(conn, notice["notice_id"], with_text=True)
 
 
 @router.post("/notices/{notice_uuid}/languages", status_code=status.HTTP_201_CREATED)
 async def add_language(
     notice_uuid: UUID,
     body: LanguageIn,
-    principal: RequireDPO,
+    principal: NoticeAuthor,
     language_code: Annotated[str, Query()],
 ) -> dict[str, Any]:
     async with transaction() as conn:
@@ -471,7 +518,7 @@ async def add_language(
 
 @router.put("/notices/{notice_uuid}/languages/{code}", summary="Draft only")
 async def update_language(
-    notice_uuid: UUID, code: str, body: LanguageIn, principal: RequireDPO
+    notice_uuid: UUID, code: str, body: LanguageIn, principal: NoticeAuthor
 ) -> dict[str, Any]:
     """Replacing the text clears the approval.
 
@@ -503,7 +550,7 @@ async def approve_language(notice_uuid: UUID, code: str, principal: RequireDPO) 
 
 
 @router.get("/notices/{notice_uuid}/checklist", response_model=Checklist)
-async def checklist(notice_uuid: UUID, principal: RequireDPO) -> dict[str, Any]:
+async def checklist(notice_uuid: UUID, principal: NoticeReader) -> dict[str, Any]:
     async with connection() as conn:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         return await service.checklist(conn, notice["notice_id"])
@@ -512,7 +559,7 @@ async def checklist(notice_uuid: UUID, principal: RequireDPO) -> dict[str, Any]:
 @router.get("/notices/{notice_uuid}/preview")
 async def preview(
     notice_uuid: UUID,
-    principal: RequireDPO,
+    principal: NoticeReader,
     language_code: Annotated[str | None, Query()] = None,
 ) -> dict[str, Any]:
     async with connection() as conn:

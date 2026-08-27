@@ -7,4 +7,4 @@
  */
 
 export { ImportWizard } from "@/features/exchange/components/import-wizard";
-export { ExportForm } from "@/features/exchange/components/forms";
+export { ExportForm } from "@/features/exchange/components/export-form";

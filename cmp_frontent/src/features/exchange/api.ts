@@ -76,11 +76,6 @@ export function getCollectionExceptions(uuid: Uuid): Promise<CollectionException
 
 /* ---------------------------------------------------------------- writes */
 
-export interface ExportInput {
-  type: string;
-  site: string;
-}
-
 export interface ExportCreated {
   export_uuid: Uuid;
   row_count: number;
@@ -99,8 +94,12 @@ export interface ImportSubmitted {
   rejected_rows: number;
 }
 
-export function createExport(projectUuid: Uuid, body: ExportInput): Promise<ExportCreated> {
-  return apiPost<ExportCreated>(`/projects/${projectUuid}/exports`, body);
+/**
+ * Generate the project's export. No body: there is one kind and it covers the
+ * project. What it contains follows the caller's own scope, decided server-side.
+ */
+export function createExport(projectUuid: Uuid): Promise<ExportCreated> {
+  return apiPost<ExportCreated>(`/projects/${projectUuid}/exports`, {});
 }
 
 /**

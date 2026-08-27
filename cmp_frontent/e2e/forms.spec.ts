@@ -30,17 +30,40 @@ test.describe("R&D User", () => {
     await dialog.getByLabel(/project name/i).fill(`E2E Project ${STAMP}`);
     await dialog.getByLabel(/^description/i).fill("Created by the end-to-end suite.");
 
-    // A nominated DCO is one of the three preconditions for creation, so the
-    // select must be populated from /users?role=dco before this can pass.
-    const dco = dialog.getByLabel(/data collection owner/i);
-    await expect(dco.locator("option")).not.toHaveCount(1);
-    await dco.selectOption({ index: 1 });
+    // At least one processor is a precondition, so the list must be populated
+    // from /processors before this can pass. Checked by name rather than by
+    // index: which processors exist is seed data, and an index would pass while
+    // silently choosing a different one.
+    const aids = dialog.getByRole("checkbox", { name: /SEED/ });
+    await expect(aids).toBeVisible();
+    await aids.check();
+
+    // The routing consequence is stated before the choice is committed, because
+    // the same form produces a project that lands in somebody else's queue or
+    // comes back to the author, and nothing else on screen says which.
+    await expect(dialog.getByText(/DCO Admin assigns the data sources/i)).toBeVisible();
 
     await dialog.getByRole("button", { name: /register project/i }).click();
 
     await expect(dialog).not.toBeVisible({ timeout: 15_000 });
     // The list must show it without a reload: the mutation invalidates the query.
     await expect(page.getByText(`E2E Project ${STAMP}`)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("refuses a project with nobody named to collect", async ({ page }) => {
+    // The field that replaced the DCO nomination. A project with no processor
+    // cannot be routed at all, so it is refused at creation rather than
+    // discovered to be un-routable after approval.
+    await page.goto("/projects");
+    await page.getByRole("button", { name: /register a project/i }).click();
+
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel(/project name/i).fill(`No Collector ${STAMP}`);
+    await dialog.getByLabel(/^description/i).fill("Nobody is named to collect this.");
+    await dialog.getByRole("button", { name: /register project/i }).click();
+
+    await expect(dialog.getByText(/choose at least one processor/i)).toBeVisible();
+    await expect(dialog).toBeVisible();
   });
 
   test("refuses a project with no description", async ({ page }) => {
@@ -71,7 +94,25 @@ test.describe("DCO", () => {
     // Submit stays disabled until validation has passed. A manifest nobody has
     // checked is exactly the input that must not reach the database.
     await expect(dialog.getByRole("button", { name: /^import/i })).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: /validate/i })).toBeVisible();
+
+    // And the check itself is not offered until it can actually run: the dry
+    // run needs a source and a project, so the step says which is missing
+    // rather than presenting a button that would fail.
+    // Matched on the button's real words. "Check it — this writes nothing" is
+    // what the control says, and a test that greps for "validate" passes or
+    // fails on vocabulary the user never sees.
+    const check = dialog.getByRole("button", { name: /check it/i });
+    await expect(dialog.getByText(/choose a source and a project first/i)).toBeVisible();
+    await expect(check).toHaveCount(0);
+
+    await dialog.getByLabel(/data source/i).selectOption({ index: 1 });
+    await dialog.getByLabel(/^project/i).selectOption({ index: 1 });
+
+    // The step unlocks, and the check is still disabled until a file is chosen.
+    await expect(check).toBeVisible();
+    await expect(check).toBeDisabled();
+    // Import stays shut either way: choosing where it came from is not checking it.
+    await expect(dialog.getByRole("button", { name: /^import/i })).toBeDisabled();
   });
 
   test("offers a consent link only for an approved project", async ({ page }) => {

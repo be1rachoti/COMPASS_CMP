@@ -10,12 +10,12 @@ from __future__ import annotations
 from typing import Any
 
 from cmp.core.pagination import PageRequest, build_page
-from cmp.db.sql import Conn, Row, execute, fetch_all, fetch_one, keyset_clause
+from cmp.db.sql import Conn, Row, fetch_all, fetch_one, keyset_clause
 
 # ------------------------------------------------------------------ processor
 PROCESSOR_COLUMNS = """
   p.processor_uuid, p.legal_name, p.type, p.contract_ref,
-  p.security_confirmed_at, p.status, p.created_at
+  p.security_confirmed_at, p.status, p.is_in_house, p.created_at
 """
 
 PROCESSOR_SORTS = ("created_at", "legal_name", "security_confirmed_at")
@@ -36,16 +36,18 @@ async def create_processor(
     type_: str,
     contract_ref: str,
     security_confirmed_at: Any,
+    is_in_house: bool = False,
 ) -> Row:
     row = await fetch_one(
         conn,
         """
-        INSERT INTO processor (legal_name, type, contract_ref, security_confirmed_at)
-        VALUES (%s, %s::processor_type, %s, %s)
+        INSERT INTO processor (legal_name, type, contract_ref, security_confirmed_at,
+                               is_in_house)
+        VALUES (%s, %s::processor_type, %s, %s, %s)
         RETURNING processor_id, processor_uuid, legal_name, type, contract_ref,
-                  security_confirmed_at, status, created_at
+                  security_confirmed_at, status, is_in_house, created_at
         """,
-        (legal_name, type_, contract_ref, security_confirmed_at),
+        (legal_name, type_, contract_ref, security_confirmed_at, is_in_house),
     )
     assert row is not None
     return row
@@ -110,8 +112,18 @@ async def list_processors(
 # ---------------------------------------------------------------- data_source
 SOURCE_COLUMNS = """
   s.source_uuid, s.source_code, s.name, s.source_role, s.exchange_mode,
-  s.id_scheme, s.is_authoritative_for, s.status, s.created_at
+  s.id_scheme, s.is_authoritative_for, s.status, s.created_at,
+  s.owner_user_id IS NOT NULL AS has_owner,
+  owner.uuid      AS owner_user_uuid,
+  owner.full_name AS owner_name,
+  owner.role      AS owner_role
 """
+
+#: `SOURCE_COLUMNS` names `owner`, so every query using it needs this join. Kept
+#: beside the column list rather than repeated at each call site, where one of
+#: them would eventually be missed.
+SOURCE_JOINS = " LEFT JOIN auth_user owner ON owner.id = s.owner_user_id "
+
 
 SOURCE_SORTS = ("created_at", "name", "source_code")
 
@@ -119,12 +131,13 @@ SOURCE_SORTS = ("created_at", "name", "source_code")
 async def source_by_uuid(conn: Conn, source_uuid: str) -> Row | None:
     return await fetch_one(
         conn,
-        f"""SELECT s.source_id, {SOURCE_COLUMNS},
-            pr.processor_uuid, pr.legal_name AS processor_name,
+        f"""SELECT s.source_id, s.processor_id, {SOURCE_COLUMNS},
+            pr.processor_uuid, pr.legal_name AS processor_name, pr.is_in_house,
             ps.site_uuid, ps.site_label
             FROM data_source s
             LEFT JOIN processor pr ON pr.processor_id = s.processor_id
             LEFT JOIN project_site ps ON ps.site_id = s.site_id
+            {SOURCE_JOINS}
             WHERE s.source_uuid = %s""",
         (source_uuid,),
     )
@@ -133,7 +146,8 @@ async def source_by_uuid(conn: Conn, source_uuid: str) -> Row | None:
 async def source_by_code(conn: Conn, source_code: str) -> Row | None:
     return await fetch_one(
         conn,
-        f"SELECT s.source_id, {SOURCE_COLUMNS} FROM data_source s WHERE s.source_code = %s",
+        f"SELECT s.source_id, {SOURCE_COLUMNS} FROM data_source s {SOURCE_JOINS}"
+        f" WHERE s.source_code = %s",
         (source_code,),
     )
 
@@ -199,6 +213,45 @@ async def update_source(
     return row
 
 
+async def projects_using_source(conn: Conn, source_id: int) -> int:
+    """How many projects deploy this source at an active site.
+
+    Read before an ownership change so the response can say how many studies it
+    moved. Reassigning a rig used by three studies moves three studies, and that
+    is worth seeing rather than discovering.
+    """
+    row = await fetch_one(
+        conn,
+        """SELECT count(DISTINCT ps.project_id) AS n FROM project_site ps
+            WHERE ps.source_id = %s AND ps.status = 'active'""",
+        (source_id,),
+    )
+    return int((row or {}).get("n") or 0)
+
+
+async def set_source_owner(conn: Conn, source_id: int, owner_user_id: int | None) -> Row:
+    """Hand a source to somebody, or take it back.
+
+    Nulling it is a real operation, not a bug: a source between owners is
+    honestly unowned, and leaving the previous name on it would say somebody is
+    accountable who is not. The trigger on `data_source` re-derives the routing
+    of every project using this source, so this one write is the whole change.
+
+    Re-read rather than RETURNING, because the owner's name comes from a joined
+    table that RETURNING cannot reach.
+    """
+    row = await fetch_one(
+        conn,
+        """UPDATE data_source SET owner_user_id = %s WHERE source_id = %s
+         RETURNING source_uuid""",
+        (owner_user_id, source_id),
+    )
+    assert row is not None
+    fresh = await source_by_uuid(conn, row["source_uuid"])
+    assert fresh is not None
+    return fresh
+
+
 async def suspend_source(conn: Conn, source_id: int) -> None:
     await conn.execute(
         "UPDATE data_source SET status = 'suspended' WHERE source_id = %s", (source_id,)
@@ -213,6 +266,9 @@ async def list_sources(
     source_role: str | None = None,
     processor_uuid: str | None = None,
     unmapped: bool = False,
+    unowned: bool = False,
+    owner_user_id: int | None = None,
+    in_house: bool | None = None,
     q: str | None = None,
 ) -> tuple[list[Row], str | None, int]:
     where, params = ["1 = 1"], []
@@ -235,6 +291,20 @@ async def list_sources(
         # inventing a processor record for yourself. It is a *gap worth seeing*,
         # which is why it is a filter rather than a constraint.
         where.append("s.processor_id IS NULL")
+    if unowned:
+        # The DCO Admin's working list: sources nobody is accountable for yet.
+        where.append("s.owner_user_id IS NULL")
+    if owner_user_id is not None:
+        where.append("s.owner_user_id = %s")
+        params.append(owner_user_id)
+    if in_house is not None:
+        # Whose collection this is, which decides who routes it. A source with no
+        # processor at all is not in-house by default - it is unanswered, and
+        # matching it either way would be a guess.
+        where.append(
+            "s.processor_id IN (SELECT processor_id FROM processor WHERE is_in_house = %s)"
+        )
+        params.append(in_house)
     if q:
         where.append("(s.name ILIKE %s OR s.source_code ILIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])
@@ -244,9 +314,10 @@ async def list_sources(
     rows = await fetch_all(
         conn,
         f"""SELECT s.source_id AS _row_id, {SOURCE_COLUMNS},
-            pr.processor_uuid, pr.legal_name AS processor_name
+            pr.processor_uuid, pr.legal_name AS processor_name, pr.is_in_house
             FROM data_source s
             LEFT JOIN processor pr ON pr.processor_id = s.processor_id
+            {SOURCE_JOINS}
             WHERE {clause}{keyset}""",
         [*params, *kparams],
     )
@@ -422,18 +493,3 @@ async def purpose_is_published_anywhere(conn: Conn, purpose_id: int) -> bool:
         (purpose_id,),
     )
     return bool((row or {}).get("live"))
-
-
-async def bind_source_to_site(conn: Conn, *, source_id: int, site_id: int) -> None:
-    """Point a data source at the collection site it reports from.
-
-    One source serves one site: `data_source.site_id` is a single column, so
-    binding a source that already names another site moves it. That is the right
-    behaviour - a rig physically stands in one place - but it is a change worth
-    seeing, which is why the caller audits it.
-    """
-    await execute(
-        conn,
-        "UPDATE data_source SET site_id = %s WHERE source_id = %s",
-        (site_id, source_id),
-    )

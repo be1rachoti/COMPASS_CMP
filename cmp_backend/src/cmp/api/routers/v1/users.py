@@ -21,11 +21,12 @@ from cmp.api.dependencies import (
     reject_unknown_filters,
 )
 from cmp.auth.sessions import service as sessions
-from cmp.core.errors import Conflict, ValidationFailed
+from cmp.core.errors import Conflict, NotFound, ValidationFailed
 from cmp.core.pagination import PageRequest
 from cmp.core.permissions import Role
 from cmp.core.security import hash_password, new_token
 from cmp.db.pool import connection, transaction
+from cmp.db.repositories import registry as registry_repo
 from cmp.db.repositories import users as repo
 from cmp.db.sql import unique_violation
 from cmp.domain.audit import service as audit
@@ -35,6 +36,12 @@ from cmp.schemas.common import Acknowledged, Mobile, Out, Page, Schema, ShortTex
 router = APIRouter(prefix="/users", tags=["users"])
 
 user_paging = Paging(repo.LIST_SORTS, "-created_at")
+
+
+#: Roles that can hold a data source. Ownership is accountability for
+#: collection, so it belongs to the people who do it: a DCO for a third party's
+#: collection, an RCO for the R&D team's own.
+_SOURCE_OWNING_ROLES = frozenset({Role.DCO.value, Role.RCO.value})
 
 
 class UserOut(Out):
@@ -49,6 +56,10 @@ class UserOut(Out):
     status: str
     created_at: Any
     updated_at: Any
+    #: Present only on the create response, naming what was assigned in the same
+    #: request. The full list lives at `/sources?owner=…`, which stays right as
+    #: sources change hands.
+    sources: list[str] | None = None
 
 
 class CreateUser(Schema):
@@ -59,6 +70,18 @@ class CreateUser(Schema):
     mobile: Mobile | None = None
     organization_id: Annotated[str | None, Field(default=None, max_length=60)] = None
     person_type: str | None = None
+    #: The data sources this person will be accountable for, assigned as part of
+    #: creating them.
+    #:
+    #: Here because it is the moment somebody knows the answer. An account
+    #: created without sources is a Data Collection Owner who owns nothing, does
+    #: not appear in any routing, and is discovered to be idle later - so the
+    #: question is asked while the person creating the account still has the
+    #: context to answer it.
+    #:
+    #: Only for the roles that can hold one. A DPO or an administrator owning a
+    #: rig would be a category error, and is refused rather than ignored.
+    source_uuids: list[UUID] = Field(default_factory=list)
 
 
 class UpdateUser(Schema):
@@ -82,30 +105,39 @@ class PersonTypeHistoryOut(Out):
     changed_by_name: str
 
 
-class Nominee(Out):
+class CollectionOwner(Out):
+    """Somebody who can be accountable for a data source.
+
+    Four fields, and the role is one of them because it constrains the choice
+    rather than merely describing it: an RCO owns in-house collection and a DCO
+    a third party's, so the two are not interchangeable.
+    """
+
     uuid: UUID
     full_name: str
     email: str
+    role: str
 
 
 @router.get(
-    "/assignable-dcos",
-    response_model=list[Nominee],
-    summary="Active DCOs, for nomination",
+    "/collection-owners",
+    response_model=list[CollectionOwner],
+    summary="Active DCOs and RCOs, for source ownership",
 )
-async def assignable_dcos(principal: RequireStaff) -> list[dict[str, Any]]:
-    """The nomination lookup.
+async def collection_owners(principal: RequireStaff) -> list[dict[str, Any]]:
+    """The ownership lookup.
 
-    Registering a project requires nominating a Data Collection Owner, and the
-    R&D User doing the registering cannot read the account register. Without this
-    the requirement is unsatisfiable: the form has nothing to offer.
+    Making somebody accountable for a data source means picking a person, and
+    the people who do it - a DCO Admin routing a project, an R&D owner naming an
+    RCO - cannot read the account register. Without this the operation is
+    unsatisfiable: the form has nothing to offer.
 
-    Scoped to exactly what the choice needs - active DCOs, three fields - so it
-    is not a way around the register's own restrictions. Declared before
+    Scoped to exactly what the choice needs - active DCOs and RCOs, four fields -
+    so it is not a way around the register's own restrictions. Declared before
     `/users/{uuid}` so the literal path is matched first.
     """
     async with connection() as conn:
-        return await repo.assignable_dcos(conn)
+        return await repo.collection_owners(conn)
 
 
 @router.get("", response_model=Page[UserOut], summary="The staff and subject register")
@@ -135,6 +167,12 @@ async def create_user(body: CreateUser, principal: RequireAdmin) -> dict[str, An
         raise ValidationFailed(
             "Data subjects register through a consent link, not here", field="role"
         )
+    if body.source_uuids and body.role not in _SOURCE_OWNING_ROLES:
+        raise ValidationFailed(
+            "Only a Data Collection Owner or an R&D Collection Owner can be "
+            "accountable for a data source",
+            field="source_uuids",
+        )
 
     # A provisioned account starts with a random unusable password and is
     # activated through the reset flow. Emailing an initial password puts a live
@@ -161,15 +199,35 @@ async def create_user(body: CreateUser, principal: RequireAdmin) -> dict[str, An
                 ) from exc
             raise
 
+        assigned: list[str] = []
+        for source_uuid in body.source_uuids:
+            source = await registry_repo.source_by_uuid(conn, str(source_uuid))
+            if not source:
+                raise NotFound("Data source")
+            # An in-house source needs an RCO and a third party's needs a DCO.
+            # Checked here as well as on the source endpoint because this path
+            # writes ownership too, and a rule enforced in one of two places is
+            # a rule with a way round it.
+            wanted = Role.RCO.value if source.get("is_in_house") else Role.DCO.value
+            if body.role != wanted:
+                raise ValidationFailed(
+                    f"{source['source_code']} is collected "
+                    + ("in-house" if source.get("is_in_house") else "by a third party")
+                    + f", so a {wanted} is accountable for it",
+                    field="source_uuids",
+                )
+            await registry_repo.set_source_owner(conn, source["source_id"], user["id"])
+            assigned.append(source["source_code"])
+
         await audit.record(
             conn,
             event=Event.USER_CREATED,
             entity_type="auth_user",
             entity_id=user["id"],
             subject_user_id=user["id"],
-            detail={"role": body.role, "email": str(body.email)},
+            detail={"role": body.role, "email": str(body.email), "sources": assigned},
         )
-    return user
+    return {**user, "sources": assigned}
 
 
 @router.get("/{user_uuid}", response_model=UserOut)

@@ -21,7 +21,6 @@ from cmp.api.dependencies import (
     CurrentUser,
     Paging,
     RequireDPO,
-    RequireDPOorAdmin,
     RequireResource,
     reject_unknown_filters,
 )
@@ -37,6 +36,7 @@ from cmp.domain.audit import service as audit
 from cmp.domain.audit.service import Event
 from cmp.domain.consent import service as consent_service
 from cmp.domain.projects import service as service
+from cmp.domain.projects.state_machine import COLLECTION_OWNERS
 from cmp.infrastructure.storage import read_upload, save_approval_proof
 from cmp.schemas.common import Acknowledged, LongText, Out, Page, Schema, ShortText
 
@@ -63,7 +63,13 @@ class ProjectOut(Out):
 class ProjectIn(Schema):
     project_name: ShortText
     description: LongText
-    dco_user_uuid: UUID
+    #: Who will collect. At least one, and several is ordinary - a study running
+    #: at a partner campus and in-house at the same time names both.
+    #:
+    #: This replaced a nominated DCO. Which *person* is accountable follows from
+    #: the data sources chosen under these processors, and those are not chosen
+    #: yet; naming a DCO here was answering for a decision nobody had taken.
+    processor_uuids: Annotated[list[UUID], Field(min_length=1, max_length=20)]
     internal_project_name: ShortText | None = None
     requesting_team: Annotated[str | None, Field(default=None, max_length=120)] = None
 
@@ -80,34 +86,63 @@ class TransitionRequest(Schema):
     reason: Annotated[str | None, Field(default=None, max_length=1000)] = None
 
 
-class DcoAssign(Schema):
-    dco_user_uuid: UUID
+class ProcessorsIn(Schema):
+    processor_uuids: Annotated[list[UUID], Field(min_length=1, max_length=20)]
+
+
+class ProcessorRequestIn(Schema):
+    processor_uuid: UUID
+
+
+class ProcessorDecisionIn(Schema):
+    approved: bool
+    #: Required on a refusal, and the database enforces it too. "No" with
+    #: nothing after it is a decision the R&D User cannot act on, so they ask
+    #: again and get it again.
+    reason: Annotated[str | None, Field(default=None, max_length=1000)] = None
 
 
 class SiteIn(Schema):
-    site_label: Annotated[str, Field(min_length=1, max_length=160)]
-    location: Annotated[str | None, Field(default=None, max_length=200)] = None
-    processor_uuid: UUID | None = None
-    #: The rig that reports from this site. Optional - a site can be registered
-    #: before anyone has decided what will stand in it - but where given it must
-    #: belong to the same processor.
-    source_uuid: UUID | None = None
-    #: The DCO accountable for this site. Optional here and settable later
-    #: through `PUT /sites/{uuid}/dco`, because an R&D User registering a site
-    #: often does not know who will run it - but where it is given, and this is
-    #: the project's first site, the project routes to them immediately.
-    dco_user_uuid: UUID | None = None
+    """A collection site is the deployment of one data source on one project.
 
+    That is why the data source is the only required field. It decides the
+    processor (a source belongs to one), the label (a site has no name of its
+    own - it *is* that source, standing somewhere), and who is accountable (the
+    source carries its owner). Asking for those separately invited them to
+    disagree with each other, and a site whose label said one thing while its
+    source said another had two answers to one question.
 
-class SiteDcoAssign(Schema):
-    """Who is accountable for this site.
-
-    `null` un-assigns, which is a real operation: a DCO leaves and their sites
-    have to sit unowned until somebody takes them, rather than being silently
-    parked with whoever happens to run the next one.
+    The source has to be one of the project's own processors'. Anything else
+    would mean collecting through an organisation the DPO did not review.
     """
 
-    dco_user_uuid: UUID | None = None
+    source_uuid: UUID
+    #: Where it physically stands. Optional, and free text, because it is the
+    #: line a data principal reads in the notice's recipient list - "Pune,
+    #: Maharashtra" - rather than anything the system reasons about.
+    location: Annotated[str | None, Field(default=None, max_length=200)] = None
+
+
+class SiteOwnerAssign(Schema):
+    """Who runs this site on this project, when it is not the source's owner.
+
+    `null` clears the exception and the site goes back to whoever owns its data
+    source — the usual way an override ends, because it was cover and the cover
+    finished.
+    """
+
+    owner_user_uuid: UUID | None = None
+
+
+class SiteSourceAssign(Schema):
+    """Which data source stands at this site.
+
+    `null` detaches, which is a real operation: a site between sources is
+    honestly unassigned, and leaving the previous one attached would say
+    collection is happening somewhere it is not.
+    """
+
+    source_uuid: UUID | None = None
 
 
 class SiteUpdate(Schema):
@@ -232,7 +267,7 @@ async def create_project(body: ProjectIn, principal: CurrentUser) -> dict[str, A
             actor_id=principal.user_id,
             project_name=body.project_name,
             description=body.description,
-            dco_user_uuid=str(body.dco_user_uuid),
+            processor_uuids=[str(u) for u in body.processor_uuids],
             internal_project_name=body.internal_project_name,
             requesting_team=body.requesting_team,
         )
@@ -323,25 +358,114 @@ async def project_summary(project_uuid: UUID, principal: ProjectReader) -> dict[
     }
 
 
-@router.post("/projects/{project_uuid}/dco", response_model=Acknowledged)
-async def assign_dco(project_uuid: UUID, body: DcoAssign, principal: RequireDPO) -> dict[str, Any]:
+@router.get("/projects/{project_uuid}/processors")
+async def list_project_processors(
+    project_uuid: UUID, principal: ProjectReader
+) -> list[dict[str, Any]]:
+    async with connection() as conn:
+        project = await repo.require(
+            conn, str(project_uuid), role=principal.role, user_id=principal.user_id
+        )
+        return await repo.processors_for(conn, project["project_id"])
+
+
+@router.put("/projects/{project_uuid}/processors", summary="Draft only — replaces the set")
+async def set_project_processors(
+    project_uuid: UUID, body: ProcessorsIn, principal: ProjectReader
+) -> list[dict[str, Any]]:
+    """Change who will collect, while the project is still in draft.
+
+    The R&D User alone, and their own projects alone - row scope sees to the
+    second half. Naming the collectors is the initiator's decision because it is
+    the one they are answerable for: the study is theirs, and the partners are
+    the ones they arranged. A DPO who disagreed with the choice returns the
+    project to draft and says so, which leaves a record; editing it silently
+    would not.
+
+    Nobody may after approval: the processors are what the DPO reviewed and what
+    the routing was decided from, so changing them would re-point an approved
+    project at a collector nobody approved.
+    """
+    if principal.role is not Role.RND_USER:
+        raise Forbidden("Only the R&D User who owns this project may change its processors")
     async with transaction() as conn:
-        await service.assign_dco(
+        return await service.set_processors(
             conn,
             project_uuid=str(project_uuid),
-            dco_user_uuid=str(body.dco_user_uuid),
+            processor_uuids=[str(u) for u in body.processor_uuids],
             actor_id=principal.user_id,
             role=principal.role,
         )
-    return {"ok": True, "message": "Data Collection Owner assigned."}
+
+
+@router.post("/projects/{project_uuid}/processors", status_code=status.HTTP_201_CREATED)
+async def request_project_processor(
+    project_uuid: UUID, body: ProcessorRequestIn, principal: ProjectReader
+) -> dict[str, Any]:
+    """Add a collector, or ask the DPO to let you.
+
+    Which of the two depends on where the project is, and the caller does not
+    choose. In draft it is added outright - the DPO reviews the whole project at
+    approval, so asking separately would be the same question twice. Once the
+    project is approved, or while it is being reviewed, it is a request: the
+    processor goes on the list marked pending and nothing may collect under it
+    until the DPO answers.
+
+    The R&D User alone, because naming the collectors is the initiator's
+    decision - the study is theirs and the partners are the ones they arranged.
+    """
+    if principal.role is not Role.RND_USER:
+        raise Forbidden("Only the R&D User who owns this project may add a processor")
+    async with transaction() as conn:
+        return await service.request_processor(
+            conn,
+            project_uuid=str(project_uuid),
+            processor_uuid=str(body.processor_uuid),
+            actor_id=principal.user_id,
+            role=principal.role,
+        )
+
+
+@router.post("/projects/{project_uuid}/processors/{processor_uuid}/decision")
+async def decide_project_processor(
+    project_uuid: UUID,
+    processor_uuid: UUID,
+    body: ProcessorDecisionIn,
+    principal: RequireDPO,
+) -> dict[str, Any]:
+    """Approve or refuse a collector proposed for an approved project.
+
+    One endpoint with a decision rather than two verbs, because a refusal
+    carries a reason and an approval does not - and a pair of routes where only
+    one takes a body invites the reason being posted to the wrong one.
+
+    Approving does not move the project. It makes the processor real, and the
+    work then appears where it belongs: a third party's on the DCO Admin's
+    queue, an in-house one back with the R&D owner. Nothing about the project
+    changed - something was added to it.
+    """
+    async with transaction() as conn:
+        return await service.decide_processor(
+            conn,
+            project_uuid=str(project_uuid),
+            processor_uuid=str(processor_uuid),
+            approved=body.approved,
+            reason=body.reason,
+            actor_id=principal.user_id,
+            role=principal.role,
+        )
 
 
 @router.post("/projects/{project_uuid}/close")
 async def close_project(
     project_uuid: UUID, body: TransitionRequest, principal: ProjectReader
 ) -> dict[str, Any]:
-    if principal.role not in (Role.DPO, Role.DCO):
-        raise Forbidden("Only a DPO or DCO may close a project")
+    # The same set the state machine names for this transition. It listed only
+    # the DPO and the DCO, written before the other two collection owners
+    # existed - so an RCO could not close a project the state machine said they
+    # could, and the two disagreed with nothing to reconcile them.
+    if principal.role is not Role.DPO and principal.role not in COLLECTION_OWNERS:
+        raise Forbidden("Only a DPO or a collection owner may close a project")
     async with transaction() as conn:
         return await service.close(
             conn,
@@ -478,7 +602,9 @@ async def list_sites(project_uuid: UUID, principal: ProjectReader) -> list[dict[
         project = await repo.require(
             conn, str(project_uuid), role=principal.role, user_id=principal.user_id
         )
-        return await repo.list_sites(conn, project["project_id"])
+        return await repo.list_sites(
+            conn, project["project_id"], role=principal.role, user_id=principal.user_id
+        )
 
 
 @router.post("/projects/{project_uuid}/sites", status_code=status.HTTP_201_CREATED)
@@ -489,20 +615,27 @@ async def add_site(project_uuid: UUID, body: SiteIn, principal: ProjectReader) -
     the study, they know which lab or clinic is running it, and which processor
     operates it. Leaving this to the DPO meant the DPO inventing a site to get
     past their own publication screen.
+
+    The DCO Admin and the RCO are included because registering the site is the
+    first half of the job they exist to do. Routing an approved project means
+    saying where collection happens and what stands there, and a role that could
+    attach a source but not create the site it attaches to would be able to
+    finish the work only if somebody else had started it.
+
+    What it takes is a data source, chosen from those registered under the
+    project's processors - not a name typed by hand. A site is where one of
+    those sources stands.
     """
-    if principal.role not in (Role.DPO, Role.DCO, Role.RND_USER):
-        raise Forbidden("Only a DPO, DCO or R&D User may add a site")
+    if principal.role not in (Role.DPO, Role.DCO, Role.DCO_ADMIN, Role.RCO, Role.RND_USER):
+        raise Forbidden("Only a DPO, a collection owner or an R&D User may add a site")
     async with transaction() as conn:
         return await service.add_site(
             conn,
             project_uuid=str(project_uuid),
             actor_id=principal.user_id,
             role=principal.role,
-            site_label=body.site_label,
+            source_uuid=str(body.source_uuid),
             location=body.location,
-            processor_uuid=str(body.processor_uuid) if body.processor_uuid else None,
-            source_uuid=str(body.source_uuid) if body.source_uuid else None,
-            dco_user_uuid=str(body.dco_user_uuid) if body.dco_user_uuid else None,
         )
 
 
@@ -539,26 +672,36 @@ async def update_site(
     return updated
 
 
-@router.put("/sites/{site_uuid}/dco", summary="Assign the DCO accountable for a site")
-async def assign_site_dco(
-    site_uuid: UUID, body: SiteDcoAssign, principal: RequireDPOorAdmin
+@router.put("/sites/{site_uuid}/source", summary="Attach the data source that stands here")
+async def assign_site_source(
+    site_uuid: UUID, body: SiteSourceAssign, principal: CurrentUser
 ) -> dict[str, Any]:
-    """Hand a site to a DCO. The project follows.
+    """Attach a data source to a site. The project follows.
 
-    Sites are how a DCO's workload is defined — the campuses, rigs and partner
-    locations they are accountable for — and a project is work that happens at
-    some of them. So this is the only place project ownership is decided:
-    `trg_site_owner` re-derives `project.dco_user_id` from the primary site, and
-    the project moves into the new owner's list on commit.
+    This is the routing step, and it is deliberately not a way to name a person.
+    A source carries its own owner, so choosing CIT for a site is choosing
+    whoever runs CIT - the two cannot disagree, because there is only one of
+    them. `trg_site_owner` re-derives `project.dco_user_id` from the primary
+    site on commit, and the project appears in that owner's list.
 
-    Restricted to DPO and administrator. A DCO reassigning their own sites could
-    hand themselves somebody else's project, or drop one they no longer want.
+    Who may call it follows the same split as the routing itself:
+
+    * a **DCO Admin** on a project collected by a third party - that queue is
+      their job;
+    * the **R&D owner** on one collected in-house, which is where an approved
+      project goes back to them to name the sources and an RCO;
+    * a **DPO** or **administrator** anywhere, for correction.
+
+    A DCO is not on that list. Reassigning their own sites would let them hand
+    themselves somebody else's project, or drop one they no longer want.
 
     The response reports the routing consequence rather than leaving the caller
-    to infer it: `project_moved` is true when this assignment changed who owns
-    the project, which is the fact somebody needs to see before they close the
-    dialog.
+    to infer it: `project_moved` is true when this changed who owns the project,
+    which is the fact somebody needs to see before they close the dialog.
     """
+    if principal.role not in (Role.DPO, Role.ADMIN, Role.DCO_ADMIN, Role.RND_USER):
+        raise Forbidden("Only a DPO, administrator, DCO Admin or the R&D owner may do this")
+
     async with transaction() as conn:
         site = await repo.site_by_uuid(
             conn, str(site_uuid), role=principal.role, user_id=principal.user_id
@@ -566,46 +709,74 @@ async def assign_site_dco(
         if not site:
             raise NotFound("Site")
 
-        dco_id: int | None = None
-        if body.dco_user_uuid is not None:
-            from cmp.db.repositories import users as users_repo
-
-            dco = await users_repo.by_uuid(conn, str(body.dco_user_uuid))
-            if not dco:
-                raise NotFound("User")
-            if dco["role"] != Role.DCO:
-                raise ValidationFailed(
-                    "Only a Data Collection Owner can be accountable for a site",
-                    field="dco_user_uuid",
-                )
-            if dco["status"] != "active":
-                raise ValidationFailed("That account is not active", field="dco_user_uuid")
-            dco_id = dco["id"]
-
-        owner_before = await repo.project_dco_id(conn, site["project_id"])
-        await repo.set_site_dco(conn, site["site_id"], dco_id)
-        owner_after = await repo.project_dco_id(conn, site["project_id"])
-
-        await audit.record(
+        result = await service.assign_source(
             conn,
-            event=Event.SITE_DCO_ASSIGNED,
-            entity_type="project_site",
-            entity_id=site["site_id"],
-            detail={
-                "site_label": site["site_label"],
-                "project": str(site["project_uuid"]),
-                "dco": str(body.dco_user_uuid) if body.dco_user_uuid else None,
-                "project_owner_changed": owner_before != owner_after,
-            },
+            project_uuid=str(site["project_uuid"]),
+            site_uuid=str(site_uuid),
+            source_uuid=str(body.source_uuid) if body.source_uuid else None,
+            actor_id=principal.user_id,
+            role=principal.role,
         )
 
     return {
         "ok": True,
-        "project_moved": owner_before != owner_after,
+        "project_moved": result["owner_changed"],
         "message": (
-            "Site assigned. This project has moved to the new owner."
-            if owner_before != owner_after
-            else "Site assigned. The project's owner is unchanged."
+            "Source attached. This project has moved to its owner."
+            if result["owner_changed"]
+            else "Source attached. The project's owner is unchanged."
+        ),
+    }
+
+
+@router.put("/sites/{site_uuid}/owner", summary="Name who runs this site, overriding its source")
+async def assign_site_owner(
+    site_uuid: UUID, body: SiteOwnerAssign, principal: CurrentUser
+) -> dict[str, Any]:
+    """Override the owner a site inherits from its data source.
+
+    Attaching a source picks the owner automatically and that is right almost
+    every time. This is the exception: cover, a handover, a partner who insists
+    on a named contact. Several sites on one project can each name a different
+    person.
+
+    **It does not move the source.** The rig keeps its owner and every other
+    project collecting from it is untouched — which is the whole reason this is
+    a separate operation rather than a shortcut into `PUT /sources/{uuid}/owner`.
+    That endpoint moves everybody; this one moves one site.
+
+    Who may call it follows the routing: a **DCO Admin** on third-party
+    collection, the **R&D owner** on in-house, and a **DPO** or **administrator**
+    anywhere. A DCO is absent for the same reason as everywhere else — naming
+    themselves on somebody else's site is exactly what this must not enable.
+    """
+    if principal.role not in (Role.DPO, Role.ADMIN, Role.DCO_ADMIN, Role.RND_USER):
+        raise Forbidden("Only a DPO, administrator, DCO Admin or the R&D owner may do this")
+
+    async with transaction() as conn:
+        site = await repo.site_by_uuid(
+            conn, str(site_uuid), role=principal.role, user_id=principal.user_id
+        )
+        if not site:
+            raise NotFound("Site")
+
+        result = await service.assign_site_owner(
+            conn,
+            project_uuid=str(site["project_uuid"]),
+            site_uuid=str(site_uuid),
+            owner_user_uuid=str(body.owner_user_uuid) if body.owner_user_uuid else None,
+            actor_id=principal.user_id,
+            role=principal.role,
+        )
+
+    return {
+        "ok": True,
+        "project_moved": result["project_moved"],
+        "message": (
+            "This site now has its own owner. The data source is unchanged, so no other "
+            "project has moved."
+            if body.owner_user_uuid
+            else "Cleared. This site goes back to whoever owns its data source."
         ),
     }
 
@@ -644,8 +815,12 @@ async def assign_agent(
     The token is returned exactly once. What the database holds is its keyed
     digest, so this response is the only opportunity to capture it.
     """
-    if principal.role not in (Role.DPO, Role.DCO):
-        raise Forbidden("Only a DPO or DCO may assign a Field Agent")
+    # Whoever is accountable for collection at the site, which is now three
+    # roles rather than one. Minting is still confined to sites they actually
+    # run: `site_by_uuid` applies the site scope, so widening the role here
+    # widens nobody's reach - it only stops an RCO being refused their own.
+    if principal.role is not Role.DPO and principal.role not in COLLECTION_OWNERS:
+        raise Forbidden("Only a DPO or a collection owner may assign a Field Agent")
 
     async with transaction() as conn:
         link = await consent_service.create_link(

@@ -21,10 +21,13 @@ const ROLES = [
   {
     role: "dco",
     name: "DCO",
+    // `/sources` because a collection owner registers the rigs they will run.
+    // Which processor they may register under is the constraint, not whether.
     expected: [
       "/dashboard",
       "/projects",
       "/sites",
+      "/sources",
       "/links",
       "/consents",
       "/exports",
@@ -35,7 +38,54 @@ const ROLES = [
   {
     role: "rnd",
     name: "R&D User",
-    expected: ["/dashboard", "/projects", "/approvals", "/imports", "/collections"],
+    // `/notices` and `/processors` because the author now writes the notice and
+    // names who will collect. Both used to be the DPO's, and both were things
+    // the DPO had to be told before they could enter them.
+    expected: [
+      "/dashboard",
+      "/projects",
+      "/notices",
+      "/processors",
+      "/approvals",
+      "/imports",
+      "/collections",
+    ],
+  },
+  {
+    role: "dcoadmin",
+    name: "DCO Admin",
+    // `/sources` is the difference from a DCO, and it is the whole job: the
+    // routing queue is sources with nobody accountable, and making somebody
+    // accountable is what moves a project.
+    expected: [
+      "/dashboard",
+      "/projects",
+      "/sites",
+      "/sources",
+      "/links",
+      "/consents",
+      "/exports",
+      "/imports",
+      "/collections",
+    ],
+  },
+  {
+    role: "rco",
+    name: "RCO",
+    // The same sections as a DCO. The difference is which processors their
+    // registry offers — in-house rather than a third party's — not which pages
+    // they can open.
+    expected: [
+      "/dashboard",
+      "/projects",
+      "/sites",
+      "/sources",
+      "/links",
+      "/consents",
+      "/exports",
+      "/imports",
+      "/collections",
+    ],
   },
 ];
 

@@ -63,6 +63,7 @@ export const keys = {
     transitions: (uuid: Uuid) => ["project", uuid, "transitions"] as const,
     approvals: (uuid: Uuid) => ["project", uuid, "approvals"] as const,
     sites: (uuid: Uuid) => ["project", uuid, "sites"] as const,
+    processors: (uuid: Uuid) => ["project", uuid, "processors"] as const,
     allSites: (params?: Params) => ["all", "sites", params ?? {}] as const,
     allApprovals: (params?: Params) => ["all", "approvals", params ?? {}] as const,
   },
@@ -135,7 +136,7 @@ export const keys = {
   users: {
     list: (params?: Params) => ["users", params ?? {}] as const,
     sessions: ["users", "sessions"] as const,
-    assignableDcos: ["users", "assignable-dcos"] as const,
+    collectionOwners: ["users", "collection-owners"] as const,
   },
 
   /** The data principal's own records, which are a different endpoint set from

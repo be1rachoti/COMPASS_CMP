@@ -18,11 +18,27 @@ from cmp.db.sql import Conn, Row, fetch_all, fetch_one, keyset_clause
 
 
 def _project_scope(role: Role | str, user_id: int) -> tuple[str, list[Any]]:
+    """Which consents and links this caller may see.
+
+    Scoped to the **site** a consent was collected at, not to the project it
+    belongs to. Those differ on any project with more than one collection owner,
+    and keying on `p.dco_user_id` - the *primary* site's owner - was wrong in
+    both directions at once: the owner of the primary site saw every consent on
+    the project including ones taken at somebody else's campus, and the other
+    owner saw none of their own.
+
+    Every query behind this joins `project_site s` through the link, and
+    `consent_artefact.link_id` is NOT NULL, so there is always a site to scope
+    by. An R&D User still sees their whole project - they designed the study,
+    and its consents are the thing it exists to produce.
+    """
     match scope_of("consent", role):
         case Scope.ALL:
             return "TRUE", []
         case Scope.SCOPED:
-            return "p.dco_user_id = %s", [user_id]
+            from cmp.db.repositories.projects import site_scope_predicate
+
+            return site_scope_predicate(role, user_id, alias="s")
         case Scope.OWN:
             return "p.created_by = %s", [user_id]
         case _:

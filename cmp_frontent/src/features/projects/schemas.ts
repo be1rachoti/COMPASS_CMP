@@ -29,7 +29,15 @@ export const projectSchema = z.object({
   // LongText's: this is what a DPO reads to decide whether the purposes are
   // honest, and truncating it at review time would be the wrong economy.
   description: longText("A description", "Describe what this project collects and why"),
-  dco_user_uuid: uuid("The Data Collection Owner"),
+  // Who will collect. At least one — the project cannot be routed without it,
+  // and a project nobody is collecting for is a project nobody will act on.
+  //
+  // This replaced a nominated DCO. Which person is accountable follows from the
+  // data sources chosen under these processors, and those do not exist yet.
+  processor_uuids: z
+    .array(uuid("A processor"))
+    .min(1, "Choose at least one processor")
+    .max(20, "That is more collectors than a project can have"),
   internal_project_name: optional(shortText("The internal name")),
   requesting_team: optional(refText("The requesting team")),
 });
@@ -45,15 +53,12 @@ export type CloseProjectValues = z.infer<typeof closeProjectSchema>;
 /* ------------------------------------------------------------------ site */
 
 export const siteSchema = z.object({
-  // 160 rather than the usual 200: this is the `varchar(160)` the column holds.
-  site_label: z
-    .string()
-    .trim()
-    .min(1, "A label is required")
-    .max(160, "A site label has to fit in 160 characters"),
+  // A site is one data source, deployed. There is no label field because a site
+  // has no name of its own — it *is* that source, standing somewhere — and no
+  // processor field because a source belongs to exactly one. Asking for either
+  // separately invited them to disagree with the source.
+  source_uuid: uuid("The data source"),
   location: optional(shortText("The location")),
-  processor_uuid: optional(uuid("The processor")),
-  source_uuid: optional(uuid("The data source")),
 });
 
 export type SiteValues = z.infer<typeof siteSchema>;

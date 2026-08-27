@@ -16,7 +16,16 @@ from cmp.db.sql import Conn, Row, fetch_all, fetch_one, keyset_clause
 NOTICE_COLUMNS = """
   n.notice_uuid, n.notice_code, n.version, n.withdraw_url, n.exercise_rights_url,
   n.board_complaint_url, n.dpo_contact, n.recipients_text, n.status,
+  n.note, n.applicable_to,
   n.change_class, n.published_at, n.created_at, n.updated_at
+"""
+
+#: Repeated in three RETURNING clauses, which cannot use `NOTICE_COLUMNS`
+#: because RETURNING has no table alias to qualify with.
+NOTICE_RETURNING = """
+  notice_id, notice_uuid, notice_code, version, withdraw_url,
+  exercise_rights_url, board_complaint_url, dpo_contact, recipients_text,
+  status, note, applicable_to, change_class, published_at, created_at, updated_at
 """
 
 
@@ -25,6 +34,17 @@ def _project_scope(role: Role | str, user_id: int) -> tuple[str, list[Any]]:
         case Scope.ALL:
             return "TRUE", []
         case Scope.SCOPED:
+            # A DCO Admin holds every third-party project rather than an assigned
+            # set, so their notices follow the same rule. Written here rather
+            # than imported from the projects repository because a circular
+            # import between two repositories is worse than one repeated EXISTS.
+            if Role(role) is Role.DCO_ADMIN:
+                return (
+                    """EXISTS (SELECT 1 FROM project_processor pp
+                                 JOIN processor pr ON pr.processor_id = pp.processor_id
+                                WHERE pp.project_id = p.project_id AND NOT pr.is_in_house)""",
+                    [],
+                )
             return "p.dco_user_id = %s", [user_id]
         case Scope.OWN:
             return "p.created_by = %s", [user_id]
@@ -85,18 +105,19 @@ async def create(
     exercise_rights_url: str,
     board_complaint_url: str,
     dpo_contact: str,
+    note: str | None = None,
+    applicable_to: str | None = None,
     change_class: str | None = None,
 ) -> Row:
     row = await fetch_one(
         conn,
         """
         INSERT INTO notice (notice_code, project_id, version, withdraw_url,
-                            exercise_rights_url, board_complaint_url, dpo_contact, change_class)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::change_class)
-        RETURNING notice_id, notice_uuid, notice_code, version, withdraw_url,
-                  exercise_rights_url, board_complaint_url, dpo_contact, recipients_text,
-                  status, change_class, published_at, created_at, updated_at
-        """,
+                            exercise_rights_url, board_complaint_url, dpo_contact,
+                            note, applicable_to, change_class)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::notice_audience, %s::change_class)
+        RETURNING """
+        + NOTICE_RETURNING,
         (
             notice_code,
             project_id,
@@ -105,6 +126,8 @@ async def create(
             exercise_rights_url,
             board_complaint_url,
             dpo_contact,
+            note,
+            applicable_to,
             change_class,
         ),
     )
@@ -121,12 +144,12 @@ async def update_draft(conn: Conn, notice_id: int, **f: Any) -> Row:
           exercise_rights_url = COALESCE(%(exercise_rights_url)s, exercise_rights_url),
           board_complaint_url = COALESCE(%(board_complaint_url)s, board_complaint_url),
           dpo_contact         = COALESCE(%(dpo_contact)s, dpo_contact),
+          note                = COALESCE(%(note)s, note),
+          applicable_to       = COALESCE(%(applicable_to)s::notice_audience, applicable_to),
           change_class        = COALESCE(%(change_class)s::change_class, change_class)
         WHERE notice_id = %(notice_id)s
-        RETURNING notice_id, notice_uuid, notice_code, version, withdraw_url,
-                  exercise_rights_url, board_complaint_url, dpo_contact, recipients_text,
-                  status, change_class, published_at, created_at, updated_at
-        """,
+        RETURNING """
+        + NOTICE_RETURNING,
         {**f, "notice_id": notice_id},
     )
     assert row is not None

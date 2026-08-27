@@ -270,7 +270,10 @@ async def my_consent_trail(
             conn, user_id=principal.user_id, notice_id=artefact["notice_id"]
         )
         rows = await audit_repo.for_consent(conn, [c["consent_id"] for c in chain])
-        return await entity_repo.attach(conn, rows)
+        # Her routes, not the staff console's. Every endpoint under /me reads
+        # this way, and it is the whole of the fix for a data principal who
+        # followed a link about her own consent and landed on the register.
+        return await entity_repo.attach(conn, rows, for_subject=True)
 
 
 @router.post("/consents/{consent_uuid}/withdraw")
@@ -315,6 +318,8 @@ async def my_notifications(
     async with connection() as conn:
         rows = await audit_repo.for_subject(conn, principal.user_id, limit=limit)
         # "What happened to my data" has to name the thing it happened to. The
-        # same resolver the DPO's audit trail uses, on the same rows.
-        rows = await entity_repo.attach(conn, rows)
+        # same resolver the DPO's audit trail uses, on the same rows - but
+        # resolving to *her* pages. The label is the same for both readers; the
+        # link cannot be, because half of these have no page she may open.
+        rows = await entity_repo.attach(conn, rows, for_subject=True)
     return {"items": rows, "next_cursor": None, "total": len(rows)}

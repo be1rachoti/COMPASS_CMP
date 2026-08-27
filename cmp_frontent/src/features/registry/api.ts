@@ -138,6 +138,30 @@ export function updateSource(uuid: Uuid, body: Partial<SourceInput>): Promise<Da
   return apiPut<DataSource>(`/sources/${uuid}`, body);
 }
 
+/** Who is accountable for this source, and how many projects moved with it. */
+export interface SourceOwnerAssigned extends DataSource {
+  /** Reassigning a rig used by three studies moves three studies. Worth seeing
+   *  rather than discovering. */
+  projects_moved: number;
+}
+
+/**
+ * Hand a source to a DCO or an RCO, or take it back with `null`.
+ *
+ * The only place a person is named. Everywhere else — registering a site,
+ * routing an approved project — picks a source, and the owner comes with it, so
+ * there is one answer to "who is accountable for CIT" rather than one per
+ * project that used it.
+ */
+export function assignSourceOwner(
+  uuid: Uuid,
+  ownerUserUuid: Uuid | null,
+): Promise<SourceOwnerAssigned> {
+  return apiPut<SourceOwnerAssigned>(`/sources/${uuid}/owner`, {
+    owner_user_uuid: ownerUserUuid,
+  });
+}
+
 export function suspendSource(uuid: Uuid): Promise<Acknowledged> {
   return apiPost<Acknowledged>(`/sources/${uuid}/suspend`);
 }

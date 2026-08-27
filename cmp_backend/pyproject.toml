@@ -92,7 +92,10 @@ ignore = [
 # protects the service and API layers, where no SQL should appear at all.
 "src/cmp/db/repositories/*" = ["S608"]
 "src/cmp/db/sql.py" = ["S608"]
-"src/cmp/api/routers/dashboard.py" = ["S608"]
+# The dashboard composes the projects repository's scope predicate rather than
+# restating it, so it interpolates the same code-controlled fragment the
+# repository does. Values stay bound as parameters.
+"src/cmp/api/routers/v1/dashboard.py" = ["S608"]
 
 "tests/*" = ["S105", "S106", "S311", "S608"]
 

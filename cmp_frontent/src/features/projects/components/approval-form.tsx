@@ -1,7 +1,7 @@
 /**
  * Recording an approval and its proof.
  *
- * The upload is what unblocks `under_process -> pending_approval`, so the
+ * The upload is what unblocks `in_draft -> pending_approval`, so the
  * mutation invalidates the transition view as well as the approval list.
  * Without that the user uploads a document and the button they were trying to
  * unblock stays disabled.

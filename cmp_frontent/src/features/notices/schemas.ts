@@ -42,6 +42,18 @@ export const noticeSchema = z.object({
     .trim()
     .min(3, "State how the DPO can be reached")
     .max(255, "That is longer than the contact field holds"),
+  // Who the notice addresses. Exactly one — a document written for employees
+  // and for the public at once is two documents with different obligations
+  // wearing one name, and the reader can only be one of them.
+  //
+  // Optional here and required to publish, which is where the server checks it:
+  // a notice can be started before that is settled, but nothing reaches a data
+  // principal without it being answered.
+  applicable_to: optional(z.string()),
+  // An instruction to whoever collects against this notice. Never served to a
+  // data principal — it is a note to the collector, not part of what they are
+  // given.
+  note: optional(z.string().trim().max(4000, "Keep the note under 4,000 characters")),
   change_class: optional(z.string()),
   language_code: z.string().optional(),
   rendered_text: z.string().optional(),

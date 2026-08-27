@@ -22,6 +22,10 @@ export interface UserInput {
   mobile?: string | null;
   organization_id?: string | null;
   person_type?: string | null;
+  /** Data sources this person becomes accountable for, assigned as part of
+   *  creating them. Only meaningful for a DCO or an RCO — the server refuses it
+   *  for any other role rather than ignoring it. */
+  source_uuids?: string[];
 }
 
 export function createUser(body: UserInput): Promise<User> {

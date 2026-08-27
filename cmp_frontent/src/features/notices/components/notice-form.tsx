@@ -17,6 +17,20 @@ import type { Notice } from "@/types";
 import { useToast } from "@/providers";
 import { noticeSchema } from "@/features/notices/schemas";
 
+/**
+ * Who a notice addresses.
+ *
+ * A fixed list rather than `/meta/enums`, because the wording here is doing
+ * work the raw labels do not: "Employee" alone leaves somebody guessing whether
+ * a contractor counts.
+ */
+const AUDIENCES = [
+  { value: "data_subject", label: "Data subjects — people outside the organisation" },
+  { value: "employee", label: "Employees" },
+  { value: "ex_employee", label: "Former employees" },
+  { value: "others", label: "Others" },
+] as const;
+
 export function NoticeForm({
   projectUuid,
   notice,
@@ -42,6 +56,8 @@ export function NoticeForm({
     exercise_rights_url: notice?.exercise_rights_url ?? "",
     board_complaint_url: notice?.board_complaint_url ?? "",
     dpo_contact: notice?.dpo_contact ?? "",
+    applicable_to: notice?.applicable_to ?? "",
+    note: notice?.note ?? "",
     change_class: notice?.change_class ?? "",
     language_code: "english",
     rendered_text: "",
@@ -59,6 +75,8 @@ export function NoticeForm({
         exercise_rights_url: values.exercise_rights_url,
         board_complaint_url: values.board_complaint_url,
         dpo_contact: values.dpo_contact,
+        applicable_to: values.applicable_to || null,
+        note: values.note || null,
         change_class: values.change_class || null,
       });
       toast.success("Notice updated");
@@ -68,6 +86,8 @@ export function NoticeForm({
         exercise_rights_url: values.exercise_rights_url,
         board_complaint_url: values.board_complaint_url,
         dpo_contact: values.dpo_contact,
+        applicable_to: values.applicable_to || null,
+        note: values.note || null,
         change_class: values.change_class || null,
         // Empty means "generate one" to the API. Sending "" would be a code.
         notice_code: ownCode && values.notice_code ? values.notice_code : null,
@@ -141,6 +161,40 @@ export function NoticeForm({
         >
           {(p) => (
             <Input {...p} {...form.register("dpo_contact")} placeholder="privacy@example.org" />
+          )}
+        </Field>
+
+        <Field
+          label="Applies to"
+          hint="Who this notice addresses. Required before it can be published — one answer, not several."
+          error={form.formState.errors.applicable_to?.message}
+        >
+          {(p) => (
+            <Select {...p} {...form.register("applicable_to")}>
+              <option value="">Not decided yet</option>
+              {AUDIENCES.map((a) => (
+                <option key={a.value} value={a.value}>
+                  {a.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+
+        {/* Below the audience because it is read in the same breath: who this is
+            for, then what the person collecting from them needs to know. */}
+        <Field
+          label="Note for the collector"
+          hint="Shown to whoever collects against this notice, and never to the data principal. Optional."
+          error={form.formState.errors.note?.message}
+        >
+          {(p) => (
+            <Textarea
+              {...p}
+              {...form.register("note")}
+              rows={2}
+              placeholder="Record the participant ID on the consent sheet before capture."
+            />
           )}
         </Field>
 

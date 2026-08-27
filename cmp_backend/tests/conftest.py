@@ -134,6 +134,8 @@ async def seeded(conn: Any, request_context: Any) -> dict[str, Any]:
         ("dco", "dco@test.local"),
         ("rnd_user", "rnd@test.local"),
         ("admin", "admin@test.local"),
+        ("dco_admin", "dcoadmin@test.local"),
+        ("rco", "rco@test.local"),
     ]:
         row = await fetch_one(
             conn,
@@ -162,6 +164,33 @@ async def seeded(conn: Any, request_context: Any) -> dict[str, Any]:
            VALUES ('Test Project', 'A test project', %s, %s, 'approved')
            RETURNING project_id, project_uuid""",
         (ids["rnd_user"]["id"], ids["dco"]["id"]),
+    )
+
+    # Two processors that differ in the one way routing cares about: who is
+    # doing the collecting. The test project names the third-party one, which is
+    # what puts it in a DCO Admin's scope.
+    processors = {}
+    for key, legal_name, in_house in [
+        ("external", "Test Processor Ltd", False),
+        ("in_house", "Test Internal Team", True),
+    ]:
+        processors[key] = await fetch_one(
+            conn,
+            """INSERT INTO processor (legal_name, type, contract_ref,
+                                     security_confirmed_at, is_in_house)
+               VALUES (%s, 'lab', 'CTR-TEST', current_date, %s)
+               RETURNING processor_id, processor_uuid""",
+            (legal_name, in_house),
+        )
+
+    await conn.execute(
+        """INSERT INTO project_processor (project_id, processor_id, added_by)
+           VALUES (%s, %s, %s)""",
+        (
+            project["project_id"],
+            processors["external"]["processor_id"],
+            ids["rnd_user"]["id"],
+        ),
     )
 
     site = await fetch_one(
@@ -227,6 +256,7 @@ async def seeded(conn: Any, request_context: Any) -> dict[str, Any]:
         "subject": subject,
         "purpose": purpose,
         "project": project,
+        "processors": processors,
         "site": site,
         "notice": notice,
         "language": language,

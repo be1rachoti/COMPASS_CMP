@@ -9,7 +9,9 @@
  * Three behaviours worth keeping:
  *
  * - A **blocked** transition renders as a disabled button *with its reason*.
- *   Hiding it leaves the user unable to work out what to fix.
+ *   Hiding it leaves the user unable to work out what to fix. Where the reason
+ *   is something the reader can go and do, it carries a link to the screen that
+ *   does it — a reason without a route is only half an answer.
  * - A transition that **requires a reason** opens a confirmation with a
  *   mandatory note. Returning a project to draft without saying why makes the
  *   history useless to whoever reads it next.
@@ -19,6 +21,7 @@
 "use client";
 
 import { AlertTriangle, ArrowRight, Lock } from "lucide-react";
+import Link from "next/link";
 import * as React from "react";
 
 import {
@@ -40,9 +43,16 @@ import { useToast } from "@/providers";
 export function TransitionControls({
   projectUuid,
   currentStatus,
+  noticeUuid,
 }: {
   projectUuid: string;
   currentStatus: ProjectStatus;
+  /** The notice this project's approval will publish, when there is one.
+   *
+   *  Only used to route the reader out of a blocker they can clear: approving
+   *  the project is refused until the notice text is legally approved, and that
+   *  is done on the notice, not here. */
+  noticeUuid?: string | null;
 }) {
   const toast = useToast();
   const { data, isLoading, error } = useTransitions(projectUuid);
@@ -143,9 +153,22 @@ export function TransitionControls({
                 )}
               </p>
               {option.blocked_by && (
-                <p className="mt-1 flex items-center gap-1.5 text-xs text-warning-text">
+                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-warning-text">
                   <AlertTriangle className="size-3.5 shrink-0" aria-hidden="true" />
                   {option.blocked_by}
+                  {/* The one blocker whose fix is a different screen. Matched on
+                      the server's own wording rather than re-deriving the rule
+                      here — the frontend does not know the transition table, and
+                      guessing when to offer this would be a second copy of it. */}
+                  {noticeUuid && /legally approved/i.test(option.blocked_by) && (
+                    <Link
+                      href={`/notices/${noticeUuid}`}
+                      className="inline-flex items-center gap-1 font-medium text-accent-text underline underline-offset-2"
+                    >
+                      Approve the notice
+                      <ArrowRight className="size-3" aria-hidden="true" />
+                    </Link>
+                  )}
                 </p>
               )}
               {option.reason_required && option.allowed && (

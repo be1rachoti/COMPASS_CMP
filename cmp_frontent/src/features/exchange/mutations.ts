@@ -14,7 +14,6 @@ import {
   submitImport,
   validateImport,
   type ExportCreated,
-  type ExportInput,
   type ImportSubmitted,
   type ManifestUpload,
 } from "@/features/exchange/api";
@@ -28,10 +27,10 @@ import type { Uuid } from "@/types";
  * export is a new disclosure, and the console-wide list is the one a DPO
  * watches.
  */
-export function useCreateExport(projectUuid: Uuid): Result<ExportCreated, ExportInput> {
+export function useCreateExport(projectUuid: Uuid): Result<ExportCreated, void> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: ExportInput) => createExport(projectUuid, body),
+    mutationFn: () => createExport(projectUuid),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.exchange.exports(projectUuid) });
       void qc.invalidateQueries({ queryKey: keys.exchange.allExports() });

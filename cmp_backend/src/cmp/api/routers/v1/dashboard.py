@@ -17,6 +17,7 @@ from cmp.core.permissions import Role
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import audit as audit_repo
 from cmp.db.repositories import entities as entity_repo
+from cmp.db.repositories import projects as project_repo
 from cmp.db.repositories import users as user_repo
 from cmp.db.sql import fetch_all, fetch_one
 from cmp.schemas.common import Acknowledged, Out
@@ -39,8 +40,14 @@ async def dashboard(principal: CurrentUser) -> dict[str, Any]:
                 return await _rnd(conn, principal.user_id)
             case Role.DPO:
                 return await _dpo(conn)
-            case Role.DCO:
-                return await _dco(conn, principal.user_id)
+            case Role.DCO | Role.RCO:
+                # One dashboard. An RCO is accountable for collection the R&D
+                # team does itself and a DCO for a third party's, but the work
+                # in front of them - links, consents, import gaps - is the same
+                # work, and two near-identical dashboards would drift.
+                return await _dco(conn, principal.user_id, role=principal.role)
+            case Role.DCO_ADMIN:
+                return await _dco_admin(conn, principal.user_id)
             case Role.ADMIN:
                 return await _admin(conn)
             case Role.DATA_SUBJECT:
@@ -85,21 +92,24 @@ async def _rnd(conn: Any, user_id: int) -> dict[str, Any]:
         conn,
         """SELECT
              count(*) AS total,
-             count(*) FILTER (WHERE project_status = 'in_draft')         AS in_draft,
-             count(*) FILTER (WHERE project_status = 'under_process')    AS under_process,
+             count(*) FILTER (WHERE project_status IN ('in_draft', 'under_process'))
+                                                                         AS in_draft,
              count(*) FILTER (WHERE project_status = 'pending_approval') AS pending_approval,
              count(*) FILTER (WHERE project_status = 'approved')         AS approved,
              count(*) FILTER (WHERE project_status = 'closed')           AS closed
            FROM project WHERE created_by = %s""",
         (user_id,),
     )
-    # under_process with no proof-bearing approval is precisely what they must act on.
+    # A draft with no proof-bearing approval is precisely what they must act on:
+    # it is the last requirement between them and submitting for review, and the
+    # one most easily forgotten because the proof comes from somebody else.
     queue = await fetch_all(
         conn,
         """SELECT p.project_uuid, p.project_name, p.project_status, p.updated_at,
                   'Upload a security approval with its proof file' AS action
            FROM project p
-           WHERE p.created_by = %s AND p.project_status = 'under_process'
+           WHERE p.created_by = %s
+             AND p.project_status IN ('in_draft', 'under_process')
              AND NOT EXISTS (
                SELECT 1 FROM project_approval a
                WHERE a.project_id = p.project_id
@@ -153,6 +163,11 @@ async def _dpo(conn: Any) -> dict[str, Any]:
            FROM project p WHERE p.project_status = 'pending_approval'
            ORDER BY p.updated_at DESC LIMIT 25""",
     )
+    # Amendments to projects the DPO has already approved. Its own queue rather
+    # than a row in the approval one: those are projects waiting to start, this
+    # is a live project waiting to expand, and the second is easy to leave
+    # sitting because nothing about it looks stalled.
+    amendments = await project_repo.pending_processor_requests(conn)
     denials = await audit_repo.denial_counts(conn, days=7)
     # Full audit rows, resolved, so the dashboard panel and the audit page are
     # the same renderer over the same data. The partial projection this replaced
@@ -161,16 +176,21 @@ async def _dpo(conn: Any) -> dict[str, Any]:
     recent = await entity_repo.attach(conn, await audit_repo.recent(conn, limit=15))
     return {
         "role": "dpo",
-        "counts": {**_ints(counts), "access_denials_7d": denials},
+        "counts": {
+            **_ints(counts),
+            "access_denials_7d": denials,
+            "pending_processors": len(amendments),
+        },
         "queues": [
             {"name": "In Draft", "items": draft_queue},
             {"name": "Pending Approval", "items": approval_queue},
+            {"name": "New collectors awaiting your decision", "items": amendments},
         ],
         "recent": recent,
     }
 
 
-async def _dco(conn: Any, user_id: int) -> dict[str, Any]:
+async def _dco(conn: Any, user_id: int, *, role: Role = Role.DCO) -> dict[str, Any]:
     counts = await fetch_one(
         conn,
         """SELECT
@@ -208,29 +228,105 @@ async def _dco(conn: Any, user_id: int) -> dict[str, Any]:
            ORDER BY c.collected_on DESC LIMIT 25""",
         (user_id,),
     )
-    # Projects in this DCO's *read* scope: theirs, plus any holding a site they
-    # own, plus anyone they are covering for. Same predicate as the project
-    # list, so the feed and the list cannot show different worlds.
+    # Projects in this caller's *read* scope. The predicate is imported rather
+    # than restated: it used to be copied here under a comment promising the
+    # feed and the project list could not show different worlds, and a copy is
+    # exactly how they come to.
+    pred, pred_params = project_repo.scope_predicate(role, user_id)
     in_scope = await fetch_all(
-        conn,
-        """SELECT p.project_id FROM project p
-            WHERE p.dco_user_id = %(u)s
-               OR p.dco_user_id IN (SELECT delegator_user_id FROM cmp_delegators_of(%(u)s))
-               OR EXISTS (SELECT 1 FROM project_site ps
-                           WHERE ps.project_id = p.project_id
-                             AND ps.status = 'active'
-                             AND (ps.dco_user_id = %(u)s
-                                  OR ps.dco_user_id IN
-                                     (SELECT delegator_user_id FROM cmp_delegators_of(%(u)s))))""",
-        {"u": user_id},
+        conn, f"SELECT p.project_id FROM project p WHERE {pred}", pred_params
     )
     recent = await _recent_activity(
         conn, project_ids=[r["project_id"] for r in in_scope], actor_id=user_id
     )
     return {
-        "role": "dco",
+        "role": str(role),
         "counts": _ints(counts),
         "queues": [{"name": "Import exceptions", "items": exceptions}],
+        "recent": recent,
+    }
+
+
+async def _dco_admin(conn: Any, user_id: int) -> dict[str, Any]:
+    """The routing queue.
+
+    A DCO Admin's job has one shape: approved projects collected by a third party
+    whose sites have no data source attached yet. Until one is, no consent link
+    can be minted for that site and nobody is accountable for it - the project is
+    approved and stalled, and nothing else in the system says so.
+    """
+    counts = await fetch_one(
+        conn,
+        """SELECT
+             count(DISTINCT p.project_id)                                AS projects,
+             count(DISTINCT p.project_id) FILTER (
+               WHERE p.project_status = 'approved')                      AS approved_projects,
+             count(DISTINCT ps.site_id) FILTER (
+               WHERE ps.source_id IS NULL AND ps.status = 'active')      AS sites_awaiting_source,
+             (SELECT count(*) FROM data_source d
+                JOIN processor pr ON pr.processor_id = d.processor_id
+               WHERE NOT pr.is_in_house
+                 AND d.owner_user_id IS NULL
+                 AND d.status = 'active')                                AS sources_without_owner
+           FROM project p
+           JOIN project_processor pp ON pp.project_id = p.project_id
+           JOIN processor pr ON pr.processor_id = pp.processor_id
+           LEFT JOIN project_site ps ON ps.project_id = p.project_id
+          WHERE NOT pr.is_in_house""",
+    )
+    awaiting = await fetch_all(
+        conn,
+        """SELECT DISTINCT p.project_uuid, p.project_name, p.project_status, p.updated_at,
+                  ps.site_uuid, ps.site_label,
+                  'Attach the data source that will collect here' AS action
+           FROM project p
+           JOIN project_processor pp ON pp.project_id = p.project_id
+           JOIN processor pr ON pr.processor_id = pp.processor_id
+           JOIN project_site ps ON ps.project_id = p.project_id
+          WHERE NOT pr.is_in_house
+            AND p.project_status = 'approved'
+            AND ps.status = 'active'
+            AND ps.source_id IS NULL
+          ORDER BY p.updated_at DESC LIMIT 25""",
+    )
+
+    # A processor the DPO has just agreed to, with no collection set up under it
+    # yet. The site queue above cannot show this - there are no sites to show -
+    # so without it a newly approved partner is invisible to the person whose
+    # job is to set it up.
+    fresh = await fetch_all(
+        conn,
+        """SELECT p.project_uuid, p.project_name, p.project_status,
+                  pr.legal_name, pp.decided_at,
+                  'Register the collection sites for this new processor' AS action
+           FROM project_processor pp
+           JOIN project p    ON p.project_id = pp.project_id
+           JOIN processor pr ON pr.processor_id = pp.processor_id
+          WHERE pp.status = 'approved'
+            AND NOT pr.is_in_house
+            AND p.project_status = 'approved'
+            AND NOT EXISTS (SELECT 1 FROM project_site ps
+                             WHERE ps.project_id = pp.project_id
+                               AND ps.processor_id = pp.processor_id
+                               AND ps.status = 'active')
+          ORDER BY pp.decided_at DESC NULLS LAST
+          LIMIT 25""",
+    )
+
+    pred, pred_params = project_repo.scope_predicate(Role.DCO_ADMIN, user_id)
+    in_scope = await fetch_all(
+        conn, f"SELECT p.project_id FROM project p WHERE {pred}", pred_params
+    )
+    recent = await _recent_activity(
+        conn, project_ids=[r["project_id"] for r in in_scope], actor_id=user_id
+    )
+    return {
+        "role": "dco_admin",
+        "counts": _ints(counts),
+        "queues": [
+            {"name": "Processors with no collection set up", "items": fresh},
+            {"name": "Sites awaiting a data source", "items": awaiting},
+        ],
         "recent": recent,
     }
 
@@ -331,7 +427,14 @@ async def notifications(
             )
         # Same resolution the audit trail gets: a notification that says
         # "notice#42 published" tells the reader nothing they can act on.
-        rows = await entity_repo.attach(conn, rows)
+        #
+        # Resolved to the reader's own pages. A data principal's feed is all
+        # events about herself, and every one of them used to link into a staff
+        # console - `auth_user` to the administrator's account register, which
+        # is where following her own registration notification took her.
+        rows = await entity_repo.attach(
+            conn, rows, for_subject=principal.role is Role.DATA_SUBJECT
+        )
     return {"items": rows, "next_cursor": None, "total": len(rows)}
 
 

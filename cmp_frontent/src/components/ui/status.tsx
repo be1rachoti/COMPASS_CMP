@@ -34,7 +34,10 @@ type Tone = NonNullable<BadgeProps["tone"]>;
 
 const PROJECT: Record<ProjectStatus, { tone: Tone; label: string }> = {
   in_draft: { tone: "neutral", label: "In Draft" },
-  under_process: { tone: "info", label: "Under Process" },
+  // Historical only. Merged into In Draft, and kept here because status-history
+  // rows still name it — a badge that rendered the raw enum would be the one
+  // place the old vocabulary leaked back out.
+  under_process: { tone: "neutral", label: "In Draft" },
   pending_approval: { tone: "warning", label: "Pending Approval" },
   approved: { tone: "success", label: "Approved" },
   closed: { tone: "neutral", label: "Closed" },
@@ -96,6 +99,10 @@ const BATCH: Record<BatchStatus, { tone: Tone; label: string }> = {
 const ROLE: Record<Role, { tone: Tone; label: string }> = {
   dpo: { tone: "accent", label: "DPO" },
   dco: { tone: "info", label: "Data Collection Owner" },
+  // The same tone as a DCO, because it is the same kind of authority — wider,
+  // not different. A separate colour would read as a separate job.
+  dco_admin: { tone: "info", label: "DCO Admin" },
+  rco: { tone: "info", label: "R&D Collection Owner" },
   rnd_user: { tone: "neutral", label: "R&D User" },
   admin: { tone: "warning", label: "Administrator" },
   data_subject: { tone: "neutral", label: "Data Subject" },

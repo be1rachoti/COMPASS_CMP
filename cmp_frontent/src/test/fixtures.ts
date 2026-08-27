@@ -49,8 +49,16 @@ const NAV: Record<Role, string[]> = {
   ],
   rnd_user: ["dashboard", "projects", "notices", "consents", "notifications", "profile"],
   dco: [
-    "dashboard", "projects", "sites", "consents", "links", "collections",
-    "imports", "notifications", "profile",
+    "dashboard", "projects", "sites", "sources", "consents", "links",
+    "collections", "imports", "notifications", "profile",
+  ],
+  dco_admin: [
+    "dashboard", "projects", "sites", "sources", "consents", "links",
+    "collections", "imports", "notifications", "profile",
+  ],
+  rco: [
+    "dashboard", "projects", "sites", "sources", "consents", "links",
+    "collections", "imports", "notifications", "profile",
   ],
   data_subject: ["profile"],
 };

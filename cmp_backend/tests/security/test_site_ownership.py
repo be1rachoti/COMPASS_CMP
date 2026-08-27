@@ -4,9 +4,14 @@ Two features changed who can reach a project, and both are the kind of change
 that is easy to get subtly wrong in the widening direction — where nothing fails
 and somebody simply sees more than they should.
 
-* **Site ownership.** A DCO owns sites; a project routes to the DCO of its
-  primary site. Read access follows any site they hold; write access follows
-  ownership of the primary one.
+* **Source ownership.** A DCO owns *data sources*; a site deploys one; a
+  project routes to the owner of its primary site's source. Read access follows
+  any site whose source they own; write access follows ownership of the primary
+  one.
+
+  The indirection is the point. The same rig serving three projects has one
+  owner, recorded once - before this it was recorded three times and nothing
+  stopped those three disagreeing.
 * **Delegation.** A DCO covering for another reaches the other's rows, for as
   long as the arrangement lasts and not a moment longer.
 
@@ -41,15 +46,53 @@ async def _make_dco(conn: Any, name: str, email: str) -> int:
     return int(row["id"])
 
 
-async def _add_site(conn: Any, project_id: int, label: str, dco_user_id: int | None) -> int:
+async def _make_source(conn: Any, code: str, owner_user_id: int | None) -> int:
+    """A data source, owned by somebody or by nobody.
+
+    One per site in these tests. A shared source is a different property - that
+    one owner reaches several projects - and is tested where it belongs rather
+    than smuggled into every case here.
+    """
     row = await fetch_one(
         conn,
-        """INSERT INTO project_site (project_id, site_label, dco_user_id)
+        """INSERT INTO data_source (source_code, name, source_role, exchange_mode,
+                                    owner_user_id)
+           VALUES (%s, %s, 'collection', 'manual_upload', %s) RETURNING source_id""",
+        (code, code, owner_user_id),
+    )
+    assert row is not None
+    return int(row["source_id"])
+
+
+async def _add_site(conn: Any, project_id: int, label: str, dco_user_id: int | None) -> int:
+    """A site owned by somebody - which now means a site whose *source* they own.
+
+    The signature still names a user because that is what every test here is
+    actually saying. What changed underneath is where the answer is recorded.
+    """
+    source_id = await _make_source(conn, f"SRC-{label}-{project_id}-{dco_user_id}", dco_user_id)
+    row = await fetch_one(
+        conn,
+        """INSERT INTO project_site (project_id, site_label, source_id)
            VALUES (%s, %s, %s) RETURNING site_id""",
-        (project_id, label, dco_user_id),
+        (project_id, label, source_id),
     )
     assert row is not None
     return int(row["site_id"])
+
+
+async def _hand_site_to(conn: Any, site_id: int, dco_user_id: int) -> None:
+    """Move a site to somebody else, by moving the source it deploys.
+
+    Two ways to express this and they mean different things: reassigning the
+    *source* moves every project deploying it, while attaching a different
+    source moves only this site. This is the second - the site changes hands and
+    nothing else does.
+    """
+    source_id = await _make_source(conn, f"SRC-MOVED-{site_id}-{dco_user_id}", dco_user_id)
+    await conn.execute(
+        "UPDATE project_site SET source_id = %s WHERE site_id = %s", (source_id, site_id)
+    )
 
 
 async def _project_owner(conn: Any, project_id: int) -> int | None:
@@ -80,9 +123,7 @@ class TestSiteRouting:
         project_id = seeded["project"]["project_id"]
         site_id = await _add_site(conn, project_id, "Bengaluru", arun)
 
-        await conn.execute(
-            "UPDATE project_site SET dco_user_id = %s WHERE site_id = %s", (meera, site_id)
-        )
+        await _hand_site_to(conn, site_id, meera)
 
         assert await _project_owner(conn, project_id) == meera
 

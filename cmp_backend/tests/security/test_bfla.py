@@ -24,9 +24,10 @@ from cmp.auth.authorization.evaluator import (
     can_write,
     evaluate,
     readable_resources,
+    scope_of,
     writable_resources,
 )
-from cmp.core.permissions import Role
+from cmp.core.permissions import Role, Scope
 
 ALL_ROLES = tuple(Role)
 
@@ -78,17 +79,38 @@ class TestProvisioningIsAdminOnly:
         assert not can_read(resources.USER, role)
 
 
-class TestNoticePublicationIsDpoOnly:
+class TestNoticeAuthorshipIsSeparateFromApproval:
     """Publishing freezes text that consent will be given against.
 
-    A DCO or R&D User who could publish could put words in front of a data
-    subject that nobody in the Privacy Office had read.
+    The R&D User writes the notice, because they are the one who knows what the
+    study collects and why. What they cannot do is publish it: publication is
+    the DPO's, and it is enforced at the route rather than in this matrix,
+    because the matrix answers "may this role write notices at all" and the
+    answer for an author is yes.
+
+    So the property this class protects is narrower than it used to be, and more
+    precisely stated: an author's write is confined to their *own* projects, and
+    nobody outside those two roles writes a notice at all.
     """
 
-    def test_only_the_dpo_may_write_a_notice(self) -> None:
+    def test_the_dpo_and_the_author_may_write(self) -> None:
         assert can_write(resources.NOTICE, Role.DPO)
-        for role in (Role.DCO, Role.RND_USER, Role.ADMIN, Role.DATA_SUBJECT):
-            assert not can_write(resources.NOTICE, role), f"{role.value} may write notices"
+        assert can_write(resources.NOTICE, Role.RND_USER)
+
+    def test_the_author_is_confined_to_their_own_projects(self) -> None:
+        """The difference between an author and the DPO, in one assertion.
+
+        Without this, granting the R&D User write access would silently be a
+        grant over every notice in the organisation.
+        """
+        assert scope_of(resources.NOTICE, Role.RND_USER) is Scope.OWN
+        assert scope_of(resources.NOTICE, Role.DPO) is Scope.ALL
+
+    @pytest.mark.parametrize(
+        "role", [Role.DCO, Role.DCO_ADMIN, Role.RCO, Role.ADMIN, Role.DATA_SUBJECT]
+    )
+    def test_nobody_else_writes_a_notice(self, role: Role) -> None:
+        assert not can_write(resources.NOTICE, role), f"{role.value} may write notices"
 
 
 class TestTheDataSubjectSurfaceIsExactlyOne:

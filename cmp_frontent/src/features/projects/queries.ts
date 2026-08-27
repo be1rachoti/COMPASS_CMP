@@ -15,12 +15,13 @@ import {
   getProjectSummary,
   getTransitions,
   listApprovals,
-  listAssignableDcos,
+  listCollectionOwners,
   listProjectApprovals,
+  listProjectProcessors,
   listProjectSites,
   listProjects,
   listSites,
-  type Nominee,
+  type CollectionOwner,
   type ProjectFilters,
 } from "@/features/projects/api";
 import type { ApiError } from "@/lib/errors";
@@ -32,13 +33,14 @@ import type {
   Project,
   ProjectSummary,
   SiteListRow,
+  ProjectProcessor,
   SiteWithOwner,
   StatusHistoryEntry,
   TransitionsView,
   Uuid,
 } from "@/types";
 
-export type { Nominee, ProjectFilters };
+export type { CollectionOwner, ProjectFilters };
 
 export function useProjects(filters: ProjectFilters = {}) {
   return useQuery<Page<Project>, ApiError>({
@@ -110,6 +112,19 @@ export function useSites(uuid: Uuid | undefined) {
   });
 }
 
+/** Who will be collecting for this project.
+ *
+ *  Reference data for the routing screens: which data sources may be attached
+ *  to a site is decided by which processors the project named, so this is what
+ *  the source picker filters against. */
+export function useProjectProcessors(uuid: Uuid | undefined) {
+  return useQuery<ProjectProcessor[], ApiError>({
+    queryKey: keys.project.processors(uuid ?? ""),
+    queryFn: () => listProjectProcessors(uuid!),
+    enabled: Boolean(uuid),
+  });
+}
+
 export function useAllSites(filters: ListFilters = {}) {
   return useQuery<Page<SiteListRow>, ApiError>({
     queryKey: keys.project.allSites(filters),
@@ -124,9 +139,9 @@ export function useAllApprovals(filters: ListFilters = {}) {
   });
 }
 
-export function useAssignableDcos() {
-  return useQuery<Nominee[], ApiError>({
-    queryKey: keys.users.assignableDcos,
-    queryFn: listAssignableDcos,
+export function useCollectionOwners() {
+  return useQuery<CollectionOwner[], ApiError>({
+    queryKey: keys.users.collectionOwners,
+    queryFn: listCollectionOwners,
   });
 }

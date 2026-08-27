@@ -218,3 +218,87 @@ class TestAuditEntityResolution:
         rows = [{"entity_type": "some_future_table", "entity_id": 1}]
         resolved = await entity_repo.attach(conn, rows)
         assert resolved[0]["entity_label"] is None
+
+
+class TestTheNoticeAudienceAndCollectorNote:
+    """`.value` on a field pydantic had already flattened to a string.
+
+    `Schema` sets `use_enum_values=True`, so `applicable_to` arrives as `str`
+    and not as the enum the annotation names. Reading `.value` off it raised
+    `AttributeError`, which surfaced as a 500 on every notice creation that
+    named an audience - the exact request the field was added for.
+
+    Going through the service rather than the router because the fix belongs to
+    the whole write path: the router now passes the string straight through, and
+    what has to hold is that the string reaches the column.
+    """
+
+    async def test_an_audience_and_a_note_round_trip(
+        self, conn: Any, seeded: dict[str, Any]
+    ) -> None:
+        notice = await notice_service.create(
+            conn,
+            project_uuid=str(seeded["project"]["project_uuid"]),
+            actor_id=seeded["users"]["dpo"]["id"],
+            role=Role.DPO,
+            withdraw_url="https://x/w",
+            exercise_rights_url="https://x/r",
+            board_complaint_url="https://dpb.gov.in/complaint",
+            dpo_contact="privacy@example.org",
+            applicable_to="employee",
+            note="Record the participant ID before capture.",
+        )
+        assert notice["applicable_to"] == "employee"
+        assert notice["note"] == "Record the participant ID before capture."
+
+    async def test_publication_is_blocked_until_the_audience_is_answered(
+        self, conn: Any, seeded: dict[str, Any]
+    ) -> None:
+        """Rule 3 asks who the notice is for, so an unanswered audience blocks.
+
+        Stated as a checklist entry rather than a validation error on create: a
+        notice can be started before that is settled, and the checklist is where
+        the author is told what is still outstanding.
+        """
+        notice = await notice_service.create(
+            conn,
+            project_uuid=str(seeded["project"]["project_uuid"]),
+            actor_id=seeded["users"]["dpo"]["id"],
+            role=Role.DPO,
+            withdraw_url="https://x/w",
+            exercise_rights_url="https://x/r",
+            board_complaint_url="https://dpb.gov.in/complaint",
+            dpo_contact="privacy@example.org",
+        )
+        checklist = await notice_service.checklist(conn, notice["notice_id"])
+        assert any("applicable_to" in item for item in checklist["blocking"])
+
+    async def test_the_note_never_reaches_the_public_payload(
+        self, conn: Any, seeded: dict[str, Any]
+    ) -> None:
+        """It is an instruction to the collector, not part of the notice.
+
+        The public endpoints project their columns explicitly, so this holds by
+        construction - and that is exactly why it is worth a test: a later
+        `SELECT n.*` would break it silently, and the thing that breaks is a
+        disclosure.
+
+        Against a draft rather than the fixture's published notice, because the
+        freeze trigger refuses an UPDATE on a published one - which is itself
+        the right behaviour and not what is under test here.
+        """
+        notice = await notice_service.create(
+            conn,
+            project_uuid=str(seeded["project"]["project_uuid"]),
+            actor_id=seeded["users"]["dpo"]["id"],
+            role=Role.DPO,
+            withdraw_url="https://x/w",
+            exercise_rights_url="https://x/r",
+            board_complaint_url="https://dpb.gov.in/complaint",
+            dpo_contact="privacy@example.org",
+            applicable_to="data_subject",
+            note="Internal: ask for the campus ID card.",
+        )
+        preview = await notice_service.preview(conn, notice["notice_id"], None)
+        assert "note" not in preview["notice"]
+        assert "campus ID card" not in str(preview)

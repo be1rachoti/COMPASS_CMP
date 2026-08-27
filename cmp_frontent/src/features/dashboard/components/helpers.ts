@@ -54,6 +54,10 @@ export function roleBlurb(role: string | null | undefined): string {
       return "Notices awaiting publication, projects awaiting your review, and the consent position across the platform.";
     case "dco":
       return "Your approved projects, the links collecting against them, and anything that failed to reconcile on import.";
+    case "dco_admin":
+      return "Projects collected by a third party: which sites are still waiting for a data source, and who picks them up when you attach one.";
+    case "rco":
+      return "The collection your team runs itself — your approved projects, the links collecting against them, and anything that failed to reconcile on import.";
     case "rnd_user":
       return "Your projects and what each one needs from you before it can move forward.";
     case "admin":

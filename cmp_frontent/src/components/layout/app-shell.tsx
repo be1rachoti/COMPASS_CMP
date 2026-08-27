@@ -66,6 +66,13 @@ interface NavSection {
   items: NavItem[];
 }
 
+/** Everyone who is not a data principal.
+ *
+ *  Derived by exclusion so that adding a role does not require remembering to
+ *  add it here — the one thing that distinguishes a data subject is the thing
+ *  the list is actually about. */
+const STAFF_ROLES: Role[] = ["dpo", "dco", "dco_admin", "rco", "rnd_user", "admin"];
+
 const SECTIONS: NavSection[] = [
   {
     title: "Overview",
@@ -84,12 +91,16 @@ const SECTIONS: NavSection[] = [
     title: "Consent",
     items: [
       // Staff see the consent register; a data subject sees only her own records.
+      //
+      // Listed as "every staff role" rather than by name. Naming them meant a
+      // role added later silently lost the section — the server said they had
+      // it, the sidebar disagreed, and nothing failed.
       {
         key: "consents",
         href: "/consents",
         label: "Consents",
         icon: FileText,
-        roles: ["dpo", "dco", "rnd_user", "admin"],
+        roles: STAFF_ROLES,
       },
       {
         key: "consents",

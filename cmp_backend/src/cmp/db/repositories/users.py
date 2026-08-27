@@ -292,19 +292,24 @@ async def count_by_status(conn: Conn) -> dict[str, int]:
     return {r["status"]: int(r["n"]) for r in rows}
 
 
-async def assignable_dcos(conn: Conn) -> list[Row]:
-    """Active Data Collection Owners, for nomination.
+async def collection_owners(conn: Conn) -> list[Row]:
+    """Active people who can be accountable for a data source.
 
-    Deliberately its own query rather than a filter on the register. An R&D User
-    must nominate a DCO to register a project at all, but has no business reading
-    the account register - so this returns the minimum that makes the choice
-    possible: who they are, and enough to tell two people with the same name
-    apart. No status, no person type, no organisation id, no contact history.
+    Deliberately its own query rather than a filter on the register. A DCO Admin
+    routing a project, or an R&D owner naming an RCO, has to pick a person and
+    has no business reading the account register - so this returns the minimum
+    that makes the choice possible: who they are, enough to tell two people with
+    the same name apart, and which kind of owner they are. No status, no person
+    type, no organisation id, no contact history.
+
+    The role comes back because it constrains the choice rather than merely
+    describing it: an RCO is accountable for collection the R&D team does itself
+    and a DCO for a third party's, so the caller filters by which the source is.
     """
     return await fetch_all(
         conn,
-        """SELECT u.uuid, u.full_name, u.email
+        """SELECT u.uuid, u.full_name, u.email, u.role
            FROM auth_user u
-           WHERE u.role = 'dco' AND u.status = 'active'
-           ORDER BY u.full_name""",
+           WHERE u.role IN ('dco', 'rco') AND u.status = 'active'
+           ORDER BY u.role, u.full_name""",
     )

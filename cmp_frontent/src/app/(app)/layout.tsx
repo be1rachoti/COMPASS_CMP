@@ -4,18 +4,30 @@
  * `RequireAuth` renders nothing until the session resolves, so a protected page
  * never flashes its contents before redirecting. A flash of a project list is a
  * disclosure, however brief.
+ *
+ * `RequireSection` is the second gate, and answers a different question:
+ * authenticated *as whom*. The sidebar only offers what a role may use, which
+ * held until something outside the sidebar produced a URL — a notification
+ * linking a data principal to `/users` did exactly that. Neither gate is a
+ * security boundary; the permission matrix on the server is. These stop the
+ * product showing somebody a console that will refuse them.
  */
 "use client";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { SessionWarning } from "@/components/security";
+import { RequireSection, SessionWarning } from "@/components/security";
 import { Skeleton } from "@/components/ui/primitives";
 import { RequireAuth } from "@/providers";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <RequireAuth fallback={<ShellSkeleton />}>
-      <AppShell>{children}</AppShell>
+      {/* The shell still renders — the nav, the account menu, the way back —
+          because somebody who followed a wrong link needs somewhere to go.
+          What does not render is the section. */}
+      <AppShell>
+        <RequireSection>{children}</RequireSection>
+      </AppShell>
       {/* Outside the shell so it survives a page-level error boundary: a
           session about to end is exactly when somebody needs to be told. */}
       <SessionWarning />

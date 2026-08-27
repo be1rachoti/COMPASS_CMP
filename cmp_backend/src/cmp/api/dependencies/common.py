@@ -41,9 +41,20 @@ MaybeUser = Annotated[Principal | None, Depends(optional_principal)]
 RequireDPO = Annotated[Principal, Depends(RequireRole(Role.DPO))]
 RequireAdmin = Annotated[Principal, Depends(RequireRole(Role.ADMIN))]
 RequireDPOorAdmin = Annotated[Principal, Depends(RequireRole(Role.DPO, Role.ADMIN))]
-RequireStaff = Annotated[
-    Principal, Depends(RequireRole(Role.DPO, Role.DCO, Role.RND_USER, Role.ADMIN))
-]
+#: Everyone who is not a data principal.
+#:
+#: Defined by exclusion, and that direction matters. Listing the staff roles by
+#: name meant a role added later was silently not staff: the DCO Admin could not
+#: read the ownership lookup its own routing screen is built on, and the failure
+#: was a 403 on a page the sidebar offered them.
+#:
+#: The risk of the other direction is a new role getting staff access it should
+#: not have - but a new role is added deliberately, and every route behind this
+#: guard applies the permission matrix afterwards anyway. A role with no grants
+#: reaches nothing.
+STAFF_ROLES = tuple(r for r in Role if r is not Role.DATA_SUBJECT)
+
+RequireStaff = Annotated[Principal, Depends(RequireRole(*STAFF_ROLES))]
 RequireDataSubject = Annotated[Principal, Depends(RequireRole(Role.DATA_SUBJECT))]
 
 # ------------------------------------------------------------- by resource
