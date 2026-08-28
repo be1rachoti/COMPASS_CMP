@@ -128,9 +128,14 @@ test.describe("DCO", () => {
     await project.click();
     await page.waitForURL(/\/projects\//);
 
-    await expect(page.getByRole("button", { name: /create link/i }).first()).toBeVisible({
-      timeout: 15_000,
-    });
+    // Either control, because which one appears depends on whether the site
+    // already has a live link — "Create link" when it does not, "Replace link"
+    // when it does. What this test is about is that an approved project offers
+    // one at all; asserting the create wording made it fail the moment a link
+    // existed, which is not a regression in anything.
+    await expect(
+      page.getByRole("button", { name: /^(create|replace) link$/i }).first(),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });
 

@@ -24,6 +24,12 @@ export interface ConsentLink {
   notice_uuid: Uuid;
   notice_code: string;
   version: number;
+  /** The shareable path, where the link can still be recovered.
+   *
+   *  `null` for anything minted before links were sealed — those tokens were
+   *  never kept. Render that as "not available and here is how to get one",
+   *  never as an empty link. */
+  url_path: string | null;
 }
 
 export interface LinkStats {

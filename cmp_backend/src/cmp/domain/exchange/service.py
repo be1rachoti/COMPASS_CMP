@@ -33,7 +33,7 @@ from typing import Any
 
 from cmp.core.errors import Conflict, ImportRejected, NotFound, ValidationFailed
 from cmp.core.logging import get_logger
-from cmp.core.security import file_hash
+from cmp.core.security import file_hash, unseal_token
 from cmp.db.repositories import consent as consent_repo
 from cmp.db.repositories import exchange as repo
 from cmp.db.repositories import projects as project_repo
@@ -41,6 +41,7 @@ from cmp.db.repositories import registry as registry_repo
 from cmp.db.sql import Conn
 from cmp.domain.audit import service as audit
 from cmp.domain.audit.service import Event
+from cmp.domain.consent.service import link_path as consent_link_path
 
 log = get_logger("cmp.exchange")
 
@@ -107,11 +108,16 @@ EXPORT_COLUMNS = (
     "project_uuid",
     "site_label",
     "source_code",
-    # Which link the consent came in through, and whether that channel is still
-    # open. Not the URL: the token is stored as a keyed digest and the working
-    # address cannot be rebuilt from the database, which is what stops a copy of
-    # this file from being a set of live collection credentials.
+    # Which link the consent came in through, whether that channel is still
+    # open, and the address itself.
+    #
+    # The URL is here because the file exists to be handed to whoever collects,
+    # and an identifier they cannot open is not a link. It is a real credential,
+    # which is why the export writes a disclosure row and the dialog says so
+    # before generating. Empty for links minted before they were made
+    # recoverable - their tokens were never kept.
     "consent_link_uuid",
+    "consent_link_url",
     "link_status",
     "link_expires_at",
     "consent_uuid",
@@ -127,6 +133,17 @@ EXPORT_COLUMNS = (
     "notice_version",
     "notice_content_sha256",
 )
+
+
+def _link_url(row: dict[str, Any]) -> str:
+    """The shareable address, where it can still be recovered.
+
+    A path rather than an absolute URL: the host a link is served on is
+    deployment configuration, and baking one into a file that outlives the
+    deployment produces a document that is confidently wrong.
+    """
+    token = unseal_token(row.get("token_sealed"))
+    return consent_link_path(token) if token else ""
 
 
 def _consent_status(row: dict[str, Any]) -> str:
@@ -148,6 +165,7 @@ def _row_for(project: dict[str, Any], c: dict[str, Any]) -> list[Any]:
         c["site_label"],
         c["source_code"] or "",
         str(c["link_uuid"]),
+        _link_url(c),
         c["link_status"],
         c["link_expires_at"].isoformat() if c["link_expires_at"] else "",
         str(c["consent_uuid"]),

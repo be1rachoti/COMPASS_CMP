@@ -28,7 +28,7 @@ from cmp.core.errors import (
     ValidationFailed,
 )
 from cmp.core.logging import get_logger
-from cmp.core.security import new_token, token_fingerprint
+from cmp.core.security import new_token, seal_token, token_fingerprint
 from cmp.db.repositories import consent as repo
 from cmp.db.repositories import notices as notice_repo
 from cmp.db.repositories import projects as project_repo
@@ -41,6 +41,16 @@ log = get_logger("cmp.consent")
 
 
 # --------------------------------------------------------------------- links
+def link_path(token: str) -> str:
+    """The public path a token is served at.
+
+    One definition, because it is now built in three places - minting,
+    reminting, and re-displaying a sealed link - and three string literals
+    would eventually disagree about the prefix.
+    """
+    return f"/c/{token}"
+
+
 async def create_link(
     conn: Conn,
     *,
@@ -79,14 +89,18 @@ async def create_link(
         raise Conflict("The project has no published notice to serve", code="no_published_notice")
     notice = max(published, key=lambda n: n["version"])
 
-    # The raw token is returned once and never stored. What goes in the database
-    # is its keyed digest, so a table dump does not yield working links.
+    # Two forms of the token go in. The keyed digest is what a request is
+    # matched against, and is all that authenticates. The sealed copy exists so
+    # the URL can be shown again to whoever has to share it - encrypted under a
+    # key that lives in the secret manager, so a dump of this table on its own
+    # still yields nothing usable.
     raw = new_token(32)
     link = await repo.create_link(
         conn,
         notice_id=notice["notice_id"],
         site_id=site["site_id"],
         token_stored=token_fingerprint(raw)[:64],
+        token_sealed=seal_token(raw),
         expires_at=expires_at,
         max_uses=max_uses,
         created_by=actor_id,

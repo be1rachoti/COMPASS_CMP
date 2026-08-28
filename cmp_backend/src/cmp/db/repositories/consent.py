@@ -52,6 +52,10 @@ async def create_link(
     notice_id: int,
     site_id: int,
     token_stored: str,
+    #: The token encrypted, so the URL can be shown again to whoever has to
+    #: share it. Separate from `token_stored`, which is the keyed digest and is
+    #: still the only thing a request is matched against.
+    token_sealed: bytes,
     expires_at: datetime,
     max_uses: int | None,
     created_by: int,
@@ -59,11 +63,12 @@ async def create_link(
     row = await fetch_one(
         conn,
         """
-        INSERT INTO consent_link (notice_id, site_id, token, expires_at, max_uses, created_by)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO consent_link (notice_id, site_id, token, token_sealed,
+                                  expires_at, max_uses, created_by)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         RETURNING link_id, link_uuid, expires_at, max_uses, use_count, status, created_at
         """,
-        (notice_id, site_id, token_stored, expires_at, max_uses, created_by),
+        (notice_id, site_id, token_stored, token_sealed, expires_at, max_uses, created_by),
     )
     assert row is not None
     return row
@@ -100,7 +105,8 @@ async def link_by_uuid(conn: Conn, link_uuid: str, *, role: Role | str, user_id:
     return await fetch_one(
         conn,
         f"""
-        SELECT cl.link_id, cl.link_uuid, cl.expires_at, cl.max_uses, cl.use_count,
+        SELECT cl.link_id, cl.link_uuid, cl.token_sealed, cl.expires_at, cl.max_uses,
+               cl.use_count,
                cl.status, cl.created_at, cl.revoked_at,
                n.notice_uuid, n.notice_code, n.version,
                p.project_uuid, p.project_name,
@@ -177,7 +183,8 @@ async def links_for_project(conn: Conn, project_id: int) -> list[Row]:
     return await fetch_all(
         conn,
         """
-        SELECT cl.link_uuid, cl.expires_at, cl.max_uses, cl.use_count, cl.status,
+        SELECT cl.link_uuid, cl.token_sealed, cl.expires_at, cl.max_uses, cl.use_count,
+               cl.status,
                cl.created_at, cl.revoked_at,
                s.site_uuid, s.site_label,
                n.notice_uuid, n.notice_code, n.version
@@ -576,7 +583,8 @@ async def list_all_links(
     """
     rows = await fetch_all(
         conn,
-        f"""SELECT cl.link_id AS _row_id, cl.link_uuid, cl.expires_at, cl.max_uses,
+        f"""SELECT cl.link_id AS _row_id, cl.link_uuid, cl.token_sealed, cl.expires_at,
+                   cl.max_uses,
             cl.use_count, cl.status, cl.created_at, cl.revoked_at,
             n.notice_uuid, n.notice_code, n.version,
             p.project_uuid, p.project_name,

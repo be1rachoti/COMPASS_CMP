@@ -48,6 +48,7 @@ async def _site_with_consent(
     owner: int,
     person: str,
     withdrawn: bool = False,
+    sealed: bool = True,
 ) -> None:
     """A site somebody owns, with one person's consent taken there."""
     # Unique per person: `auth_user.mobile` is unique, and a shared number made
@@ -76,15 +77,23 @@ async def _site_with_consent(
         ),
     )
     assert site is not None
+    # Minted the way the service does: a real token, its keyed digest for
+    # matching, and - unless the test is standing in for a pre-0011 link - the
+    # sealed copy that lets the URL be shown again.
+    from cmp.core.security import new_token, seal_token, token_fingerprint
+
+    raw = new_token(32)
     link = await fetch_one(
         conn,
-        """INSERT INTO consent_link (notice_id, site_id, token, expires_at, created_by)
-           VALUES (%s, %s, %s, now() + interval '7 days', %s)
+        """INSERT INTO consent_link (notice_id, site_id, token, token_sealed,
+                                     expires_at, created_by)
+           VALUES (%s, %s, %s, %s, now() + interval '7 days', %s)
            RETURNING link_id""",
         (
             seeded["notice"]["notice_id"],
             site["site_id"],
-            f"tok-{code}-000000000000000000",
+            token_fingerprint(raw)[:64],
+            seal_token(raw) if sealed else None,
             seeded["users"]["dpo"]["id"],
         ),
     )
@@ -411,17 +420,18 @@ class TestTheGeneratedExportCanBeFound:
         assert str(export["export_uuid"]) in {str(r["export_uuid"]) for r in rows}
 
 
-class TestTheConsentLinkIsIdentifiedNotHandedOver:
-    """The link a consent came in through, without the credential.
+class TestTheConsentLinkIsNamedAndOpenable:
+    """The link a consent came in through, with an address that works.
 
-    `consent_link.token` holds a keyed digest of the token, not the token, so
-    the working address cannot be rebuilt from the database. That is deliberate:
-    a dump of the table yields no live links, and neither does a copy of this
-    file - which matters more here, because this one is written to be emailed
-    to whoever is running the collection.
+    This class previously asserted the opposite - that no column could carry a
+    usable token - because the token was kept only as a keyed digest and the URL
+    was unrecoverable by anyone. That was the stronger property and it was given
+    up on purpose: the file is handed to whoever collects, and an identifier
+    they cannot open is not a link.
 
-    So the export names the link and says whether it is still open. Anybody who
-    needs the URL mints or re-mints one, where it is shown exactly once.
+    The assertions that remain are the ones still true, and the ones worth
+    holding: the link is identified, its state is visible, and the *digest* -
+    the value a request is matched against - is not what travels.
     """
 
     async def test_the_row_names_the_link_and_its_state(
@@ -446,15 +456,12 @@ class TestTheConsentLinkIsIdentifiedNotHandedOver:
         assert row["link_status"] == "active"
         assert row["link_expires_at"], "an agent needs to know the channel is still open"
 
-    async def test_no_column_carries_a_usable_token(
+    async def test_the_stored_digest_is_not_what_travels(
         self, conn: Any, seeded: dict[str, Any]
     ) -> None:
-        """The property somebody would break by "adding the link" literally.
-
-        Asserted against the stored digest rather than a guessed URL shape: if a
-        future change ever puts the token in a column, this is what catches it -
-        whatever the column ends up being called.
-        """
+        """The token in the file is the credential the agent needs. The digest
+        the database matches against is a different value and has no business
+        leaving - printing it would disclose the lookup key for no benefit."""
         dco = await _owner(conn, "dco", "token.dco@test.local")
         await _site_with_consent(
             conn,
@@ -476,5 +483,110 @@ class TestTheConsentLinkIsIdentifiedNotHandedOver:
         payload, _, _ = await exchange_service._project_export(
             conn, await _project(conn, seeded), role=Role.DCO, user_id=dco
         )
-        assert stored["token"] not in payload, "the export must not carry the credential"
-        assert "/c/" not in payload, "nor anything shaped like a collection URL"
+        assert stored["token"] not in payload
+
+
+class TestTheLinkIsUsableAndStillProtected:
+    """The export is handed to whoever collects, so the link has to open.
+
+    That is a deliberate change to a property this system used to hold: the
+    token was kept only as a keyed digest and the URL was unrecoverable by
+    anyone. It is now sealed as well - encrypted under a key derived from the
+    application secret, which lives outside the database - so the address can be
+    shown again to the person who needs to share it.
+
+    What these hold is the part that did *not* change: the database alone is
+    still worth nothing.
+    """
+
+    async def test_the_row_carries_an_openable_link(
+        self, conn: Any, seeded: dict[str, Any]
+    ) -> None:
+        from cmp.core.security import token_fingerprint
+
+        dco = await _owner(conn, "dco", "url.dco@test.local")
+        await _site_with_consent(
+            conn,
+            seeded,
+            kind="external",
+            code="SRC-U-1",
+            label="CIT",
+            owner=dco,
+            person="Openable Person",
+            sealed=True,
+        )
+
+        payload, _, _ = await exchange_service._project_export(
+            conn, await _project(conn, seeded), role=Role.DCO, user_id=dco
+        )
+        row = _rows(payload)[0]
+        assert row["consent_link_url"].startswith("/c/"), "an identifier is not a link"
+
+        # And it is the real one: fingerprinting the token out of the URL finds
+        # the row the request would be matched against.
+        token = row["consent_link_url"].removeprefix("/c/")
+        found = await fetch_one(
+            conn,
+            "SELECT link_uuid FROM consent_link WHERE token = %s",
+            (token_fingerprint(token)[:64],),
+        )
+        assert found is not None, "the exported URL must resolve to its link"
+        assert str(found["link_uuid"]) == row["consent_link_uuid"]
+
+    async def test_a_link_minted_before_sealing_is_blank_not_broken(
+        self, conn: Any, seeded: dict[str, Any]
+    ) -> None:
+        """Their tokens were never kept. An empty cell is honest; a made-up URL
+        that 404s at the collection point is not."""
+        dco = await _owner(conn, "dco", "old.dco@test.local")
+        await _site_with_consent(
+            conn,
+            seeded,
+            kind="external",
+            code="SRC-U-2",
+            label="CIT",
+            owner=dco,
+            person="Legacy Person",
+            sealed=False,
+        )
+
+        payload, _, _ = await exchange_service._project_export(
+            conn, await _project(conn, seeded), role=Role.DCO, user_id=dco
+        )
+        row = _rows(payload)[0]
+        assert row["consent_link_url"] == ""
+        assert row["consent_link_uuid"], "the link is still identified"
+
+    async def test_the_database_alone_still_yields_nothing(
+        self, conn: Any, seeded: dict[str, Any]
+    ) -> None:
+        """The property that survived the change, and the reason it is
+        defensible: the sealing key is derived from the application secret,
+        which is not in this database. A dump is still inert.
+        """
+        from cmp.core.security import unseal_token
+
+        dco = await _owner(conn, "dco", "dump.dco@test.local")
+        await _site_with_consent(
+            conn,
+            seeded,
+            kind="external",
+            code="SRC-U-3",
+            label="CIT",
+            owner=dco,
+            person="Dumped Person",
+            sealed=True,
+        )
+        stored = await fetch_one(
+            conn,
+            """SELECT cl.token, cl.token_sealed FROM consent_link cl
+                 JOIN project_site s ON s.site_id = cl.site_id
+                WHERE s.site_label = 'CIT' ORDER BY cl.link_id DESC LIMIT 1""",
+        )
+        assert stored is not None
+
+        plain = unseal_token(stored["token_sealed"])
+        assert plain, "the application can open it"
+        # Neither stored column is the token itself.
+        assert plain != stored["token"]
+        assert plain.encode() not in bytes(stored["token_sealed"])

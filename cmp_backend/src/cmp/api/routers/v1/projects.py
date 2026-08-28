@@ -841,7 +841,7 @@ async def assign_agent(
     return {
         "link_uuid": link["link_uuid"],
         "token": link["token"],
-        "url_path": f"/c/{link['token']}",
+        "url_path": consent_service.link_path(link["token"]),
         "expires_at": link["expires_at"],
         "max_uses": link["max_uses"],
         "warning": "This token is shown once and cannot be retrieved again.",

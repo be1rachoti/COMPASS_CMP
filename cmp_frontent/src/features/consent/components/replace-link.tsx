@@ -25,13 +25,19 @@ import { useRemintLink } from "@/features/consent/mutations";
 import type { RemintedLink } from "@/features/consent/api";
 import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/providers";
-import type { LinkListRow } from "@/types";
+import type { ConsentLink } from "@/types";
 
+/**
+ * Typed to `ConsentLink` rather than `LinkListRow` because that is all it uses.
+ * The narrower type was what kept this dialog on the Links page: the project
+ * page has the same links in the shape the API returns them, and had no way to
+ * hand one over.
+ */
 export function ReplaceLinkDialog({
   link,
   onClose,
 }: {
-  link: LinkListRow | null;
+  link: ConsentLink | null;
   onClose: () => void;
 }) {
   if (!link) return null;
@@ -41,7 +47,7 @@ export function ReplaceLinkDialog({
   return <ReplaceLinkBody key={link.link_uuid} link={link} onClose={onClose} />;
 }
 
-function ReplaceLinkBody({ link, onClose }: { link: LinkListRow; onClose: () => void }) {
+function ReplaceLinkBody({ link, onClose }: { link: ConsentLink; onClose: () => void }) {
   const toast = useToast();
   const remint = useRemintLink();
   const [minted, setMinted] = React.useState<RemintedLink | null>(null);

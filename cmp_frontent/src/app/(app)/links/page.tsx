@@ -31,7 +31,7 @@ import { useEnums } from "@/features/meta";
 import type { LinkListRow } from "@/types";
 import { formatDateTime } from "@/lib/format";
 import { useToast } from "@/providers";
-import { ReplaceLinkDialog } from "@/features/consent/components";
+import { CopyLinkButton, ReplaceLinkDialog } from "@/features/consent/components";
 
 function LinksPageView() {
   const stack = useCursorStack();
@@ -74,13 +74,18 @@ function LinksPageView() {
           the honest answer is that we cannot tell you, because we never kept it.
           Saying so, next to the way to get a new one, beats letting somebody
           hunt for a reveal button that cannot exist. */}
-      <Alert tone="info" title="The link itself is not stored" className="mb-4">
+      <Alert tone="info" title="The link is a credential" className="mb-4">
         <p className="leading-relaxed">
-          What the database holds is a keyed digest of the token, not the token —
-          so a leaked backup is not a set of working consent links, and nobody
-          here can read one back out. The URL is shown once, when it is minted. If
-          it has been lost, issue a new one for the site; the old one keeps
-          working until you revoke it.
+          The token is encrypted with a key that lives outside the database, so a
+          leaked backup on its own is still not a set of working links — but the
+          console can show you the URL again, which is what <strong>Copy link</strong>{" "}
+          does. Anyone holding it can open the consent form for that site, so treat
+          it as a credential rather than a reference.
+        </p>
+        <p className="mt-2 leading-relaxed">
+          Links issued before this cannot be recovered: their tokens were never
+          kept. Those offer <strong>Replace</strong> instead, which revokes the old
+          one and issues a URL you can copy.
         </p>
       </Alert>
 
@@ -137,12 +142,17 @@ function LinksPageView() {
                     that already has a live one leaves two working URLs and only
                     one of them tracked. Replacing revokes and reissues in one
                     transaction. */}
+                {/* Copy first: it is what people come here to do, and it
+                    works now that the token is recoverable. Replace stays for
+                    the links that predate that, and for rotating one that has
+                    circulated further than intended. */}
+                <CopyLinkButton link={l} onReplace={() => setReplacing(l)} />
                 {l.status === "active" ? (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setReplacing(l)}
-                    title="Revoke this link and issue a replacement"
+                    title="The URL is not stored. Replacing revokes this link and issues a fresh one you can copy."
                   >
                     <RefreshCw className="size-4" />
                     Replace

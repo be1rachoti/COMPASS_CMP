@@ -86,6 +86,62 @@ def tokens_equal(a: str, b: str) -> bool:
     return hmac.compare_digest(a, b)
 
 
+# ------------------------------------------------------------- sealed tokens
+#: Derived from the application secret rather than configured separately, so
+#: there is one key to rotate and no second one to leave at its default.
+def _seal_key() -> bytes:
+    return hashlib.sha256(
+        b"cmp.consent_link.seal|" + settings.secret_key.get_secret_value().encode("utf-8")
+    ).digest()
+
+
+def seal_token(token: str) -> bytes:
+    """Encrypt a token so it can be shown again later.
+
+    A consent link is the authority to collect, and the original design kept
+    only a keyed digest: the URL was shown once and was then unrecoverable by
+    anyone, including us. That is the stronger property, and it was given up
+    deliberately - a field agent needs the link that was already shared with
+    them, and "we cannot tell you, replace it" invalidates the one they are
+    holding.
+
+    What replaces it: the token is encrypted with a key derived from the
+    application secret, which lives in the secret manager and not in the
+    database. A stolen dump on its own still yields no working links. An
+    attacker needs the database *and* the application key, where before the
+    database was worthless by itself.
+
+    AES-GCM, so a tampered ciphertext fails to decrypt rather than returning
+    something wrong. The nonce is prefixed; 12 bytes is the standard size and
+    is generated per call.
+    """
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    nonce = secrets.token_bytes(12)
+    return nonce + AESGCM(_seal_key()).encrypt(nonce, token.encode("utf-8"), None)
+
+
+def unseal_token(sealed: bytes | None) -> str | None:
+    """Recover a sealed token, or None when there is nothing to recover.
+
+    None is the ordinary answer for any link minted before sealing existed, and
+    callers must render that as "not available" rather than as an empty link.
+    A failure to decrypt returns None too: a ciphertext that will not open is
+    either tampered with or encrypted under a rotated key, and neither is
+    something to raise at somebody trying to copy a URL.
+    """
+    if not sealed:
+        return None
+
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    try:
+        return AESGCM(_seal_key()).decrypt(bytes(sealed[:12]), bytes(sealed[12:]), None).decode()
+    except (InvalidTag, ValueError):
+        return None
+
+
 # ------------------------------------------------------------------------ OTP
 def new_otp(length: int | None = None) -> str:
     n = length or settings.otp_length

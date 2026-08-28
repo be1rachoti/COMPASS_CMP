@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from cmp.api.dependencies import Paging, RequireResource, reject_unknown_filters
 from cmp.core.errors import Conflict, NotFound
 from cmp.core.pagination import PageRequest
+from cmp.core.security import unseal_token
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import consent as repo
 from cmp.db.repositories import projects as project_repo
@@ -45,6 +46,13 @@ class LinkOut(Out):
     notice_uuid: UUID
     notice_code: str
     version: int
+    #: The shareable path, where the link can still be recovered.
+    #:
+    #: `None` for anything minted before links were sealed - their tokens were
+    #: never kept. Declared here because a response model drops what it does not
+    #: name, and a field that is selected, resolved and then silently absent is
+    #: a bug that looks like an empty screen.
+    url_path: str | None = None
 
 
 class LinkStats(Out):
@@ -156,6 +164,18 @@ class ConsentAssetOut(Out):
 
 
 # ===================================================== cross-project listings
+def with_url(row: dict[str, Any]) -> dict[str, Any]:
+    """Attach the shareable path to a link row, where it can be recovered.
+
+    `None` for anything minted before links were sealed - those tokens were
+    never kept, and the interface has to say so rather than render an empty
+    link. The sealed value never leaves the process: it is decrypted here and
+    only the path goes out.
+    """
+    token = unseal_token(row.pop("token_sealed", None))
+    return {**row, "url_path": consent_service.link_path(token) if token else None}
+
+
 @router.get("/links", response_model=Page[LinkListRow], summary="All links in scope")
 async def list_all_links(
     request: Request,
@@ -174,7 +194,7 @@ async def list_all_links(
         items, cursor, total = await repo.list_all_links(
             conn, page, role=principal.role, user_id=principal.user_id, status=link_status
         )
-    return {"items": items, "next_cursor": cursor, "total": total}
+    return {"items": [with_url(i) for i in items], "next_cursor": cursor, "total": total}
 
 
 @router.get("/consents", response_model=Page[ConsentListRow], summary="All consents in scope")
@@ -206,7 +226,8 @@ async def list_links(project_uuid: UUID, principal: LinkReader) -> list[dict[str
         project = await project_repo.require(
             conn, str(project_uuid), role=principal.role, user_id=principal.user_id
         )
-        return await repo.links_for_project(conn, project["project_id"])
+        links = await repo.links_for_project(conn, project["project_id"])
+        return [with_url(link) for link in links]
 
 
 @router.get("/links/{link_uuid}", response_model=LinkOut)
@@ -217,7 +238,7 @@ async def get_link(link_uuid: UUID, principal: LinkReader) -> dict[str, Any]:
         )
         if not link:
             raise NotFound("Consent link")
-        return link
+        return with_url(link)
 
 
 @router.get("/links/{link_uuid}/stats", response_model=LinkStats)
@@ -297,7 +318,7 @@ async def remint_link(link_uuid: UUID, principal: LinkReader) -> dict[str, Any]:
         "link_uuid": fresh["link_uuid"],
         "replaced_link_uuid": link["link_uuid"],
         "token": fresh["token"],
-        "url_path": f"/c/{fresh['token']}",
+        "url_path": consent_service.link_path(fresh["token"]),
         "expires_at": fresh["expires_at"],
         "max_uses": fresh["max_uses"],
         "warning": (

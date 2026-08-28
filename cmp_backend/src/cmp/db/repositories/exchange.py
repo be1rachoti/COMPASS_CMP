@@ -21,11 +21,24 @@ from cmp.db.sql import Conn, Row, fetch_all, fetch_one, keyset_clause
 
 
 def _scope(resource: str, role: Role | str, user_id: int) -> tuple[str, list[Any]]:
+    """Which exports, imports and collections this caller may see.
+
+    The scoped case delegates to the project predicate rather than restating it
+    as `p.dco_user_id = %s`. That shorthand meant *the project's primary site
+    owner*, which is wrong on any project with more than one collection owner:
+    an RCO running the in-house lab matched nothing, so their own exports were
+    invisible to them - they generated a file and then could not find it.
+
+    The shared predicate resolves through the sites a caller actually runs, so
+    it holds however many owners a project has.
+    """
     match scope_of(resource, role):
         case Scope.ALL:
             return "TRUE", []
         case Scope.SCOPED:
-            return "p.dco_user_id = %s", [user_id]
+            from cmp.db.repositories.projects import scope_predicate
+
+            return scope_predicate(role, user_id)
         case Scope.OWN:
             return "p.created_by = %s", [user_id]
         case _:
@@ -186,6 +199,7 @@ async def project_consents(
                n.notice_uuid, n.notice_code, n.version AS notice_version,
                s.site_uuid, s.site_label, ds.source_code,
                cl.link_uuid, cl.status AS link_status, cl.expires_at AS link_expires_at,
+               cl.token_sealed,
                count(*) FILTER (WHERE g.granted)     AS granted_count,
                count(*) FILTER (WHERE NOT g.granted) AS refused_count,
                array_agg(p.purpose_code ORDER BY p.purpose_code)
@@ -204,7 +218,7 @@ async def project_consents(
                   ca.affirmative_action_at, ca.is_withdrawal, ca.notice_content_hash,
                   n.notice_uuid, n.notice_code, n.version,
                   s.site_uuid, s.site_label, ds.source_code,
-                  cl.link_uuid, cl.status, cl.expires_at
+                  cl.link_uuid, cl.status, cl.expires_at, cl.token_sealed
         HAVING ca.is_withdrawal OR count(*) FILTER (WHERE g.granted) > 0
          ORDER BY u.full_name, ca.affirmative_action_at
         """,
@@ -241,6 +255,7 @@ async def consents_in_export(conn: Conn, export_id: int) -> list[Row]:
                n.notice_code, n.version AS notice_version,
                s.site_label, ds.source_code,
                cl.link_uuid, cl.status AS link_status, cl.expires_at AS link_expires_at,
+               cl.token_sealed,
                count(*) FILTER (WHERE g.granted)     AS granted_count,
                count(*) FILTER (WHERE NOT g.granted) AS refused_count,
                array_agg(p.purpose_code ORDER BY p.purpose_code)
@@ -259,7 +274,7 @@ async def consents_in_export(conn: Conn, export_id: int) -> list[Row]:
                   u.person_type, ca.consent_uuid, ca.affirmative_action_at,
                   ca.is_withdrawal, ca.notice_content_hash, n.notice_code, n.version,
                   s.site_label, ds.source_code,
-                  cl.link_uuid, cl.status, cl.expires_at
+                  cl.link_uuid, cl.status, cl.expires_at, cl.token_sealed
          ORDER BY u.full_name, ca.affirmative_action_at
         """,
         (export_id,),
