@@ -272,13 +272,28 @@ async def attach_purpose(
     purpose_uuid: str,
     display_order: int = 0,
     is_mandatory: bool = False,
+    allow_draft: bool = False,
 ) -> dict[str, Any]:
+    """Put a purpose on a draft notice.
+
+    `allow_draft` exists for one caller: the document importer, which creates a
+    notice and its purposes together out of an uploaded file. Those purposes
+    arrive as drafts, because activating a purpose is the DPO's act and an R&D
+    User who could do it by uploading a file would be approving their own.
+
+    Attaching them anyway is what stops that being a deadlock. The notice is
+    assembled by whoever wrote it and cannot *publish* until the DPO has
+    activated every purpose on it - exactly the shape a language rendition
+    already has, where R&D supplies the text and it blocks publication until it
+    is legally approved. `checklist` is where that block lives.
+    """
     await _require_draft(conn, notice_id)
 
     purpose = await registry_repo.purpose_by_uuid(conn, purpose_uuid)
     if not purpose:
         raise NotFound("Purpose")
-    if purpose["status"] != "active":
+    permitted = {"active", "draft"} if allow_draft else {"active"}
+    if purpose["status"] not in permitted:
         raise ValidationFailed(
             "Only an active purpose may be attached to a notice",
             field="purpose_uuid",
@@ -410,6 +425,16 @@ async def checklist(conn: Conn, notice_id: int) -> dict[str, Any]:
         blocking.append("no purposes attached")
     if not languages:
         blocking.append("no language rendition has been added")
+
+    # A purpose that arrived with an uploaded notice document is a draft until
+    # the DPO activates it. Blocking here rather than at attachment is what lets
+    # an R&D User assemble the notice from the document without also being able
+    # to approve the purposes in it.
+    for purpose in purposes:
+        if purpose["status"] != "active":
+            blocking.append(
+                f"purpose '{purpose['purpose_code']}' is {purpose['status']}, not activated"
+            )
 
     for lang in languages:
         if lang["approved_at"] is None:

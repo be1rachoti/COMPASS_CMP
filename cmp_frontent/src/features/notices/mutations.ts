@@ -12,22 +12,31 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
+  activateNoticePurposes,
   approveNoticeLanguage,
   attachPurpose,
   copyNotice,
   createNotice,
   detachPurpose,
+  importNoticeDocument,
   publishNotice,
   setNoticeLanguage,
   overrideNoticePurpose,
   updateNotice,
+  validateNoticeDocument,
   type LanguageInput,
   type NoticeInput,
   type PurposeAttachment,
   type PurposeOverride,
 } from "@/features/notices/api";
 import { keys, prefixes, type Result } from "@/lib/query";
-import type { Acknowledged, LanguageCode, Notice, Uuid } from "@/types";
+import type {
+  Acknowledged,
+  LanguageCode,
+  Notice,
+  NoticeDocumentReport,
+  Uuid,
+} from "@/types";
 
 export type { LanguageInput, NoticeInput, PurposeAttachment, PurposeOverride };
 
@@ -127,5 +136,46 @@ export function useOverrideNoticePurpose(
     mutationFn: ({ purposeUuid, body }: { purposeUuid: Uuid; body: PurposeOverride }) =>
       overrideNoticePurpose(noticeUuid, purposeUuid, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.notice.detail(noticeUuid) }),
+  });
+}
+
+/* ------------------------------------------------- from an uploaded document */
+
+/**
+ * Dry run of a notice document.
+ *
+ * A mutation rather than a query even though it writes nothing: it is an action
+ * the user takes with a file they picked, not a value that can be refetched.
+ */
+export function useValidateNoticeDocument(projectUuid: Uuid) {
+  return useMutation<NoticeDocumentReport, Error, File>({
+    mutationFn: (file) => validateNoticeDocument(projectUuid, file),
+  });
+}
+
+export function useImportNoticeDocument(projectUuid: Uuid) {
+  const qc = useQueryClient();
+  return useMutation<Notice, Error, File>({
+    mutationFn: (file) => importNoticeDocument(projectUuid, file),
+    onSuccess: () => {
+      // The import creates a notice, its rendition and its purposes at once, so
+      // the project surface, the notice list and the register all go stale
+      // together.
+      void qc.invalidateQueries({ queryKey: keys.notice.all() });
+      void qc.invalidateQueries({ queryKey: keys.project.detail(projectUuid) });
+      void qc.invalidateQueries({ queryKey: ["purposes"] });
+    },
+  });
+}
+
+/** The DPO activating every draft purpose an import left on a notice. */
+export function useActivateNoticePurposes(noticeUuid: Uuid) {
+  const qc = useQueryClient();
+  return useMutation<Acknowledged, Error, void>({
+    mutationFn: () => activateNoticePurposes(noticeUuid),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.notice.detail(noticeUuid) });
+      void qc.invalidateQueries({ queryKey: ["purposes"] });
+    },
   });
 }

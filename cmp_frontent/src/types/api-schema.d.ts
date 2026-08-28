@@ -1460,7 +1460,7 @@ export interface paths {
         /** List Project Processors */
         get: operations["list_project_processors_projects__project_uuid__processors_get"];
         /**
-         * Draft only
+         * Draft only — replaces the set
          * @description Change who will collect, while the project is still in draft.
          *
          *     The R&D User alone, and their own projects alone - row scope sees to the
@@ -1475,7 +1475,50 @@ export interface paths {
          *     project at a collector nobody approved.
          */
         put: operations["set_project_processors_projects__project_uuid__processors_put"];
-        post?: never;
+        /**
+         * Request Project Processor
+         * @description Add a collector, or ask the DPO to let you.
+         *
+         *     Which of the two depends on where the project is, and the caller does not
+         *     choose. In draft it is added outright - the DPO reviews the whole project at
+         *     approval, so asking separately would be the same question twice. Once the
+         *     project is approved, or while it is being reviewed, it is a request: the
+         *     processor goes on the list marked pending and nothing may collect under it
+         *     until the DPO answers.
+         *
+         *     The R&D User alone, because naming the collectors is the initiator's
+         *     decision - the study is theirs and the partners are the ones they arranged.
+         */
+        post: operations["request_project_processor_projects__project_uuid__processors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_uuid}/processors/{processor_uuid}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Project Processor
+         * @description Approve or refuse a collector proposed for an approved project.
+         *
+         *     One endpoint with a decision rather than two verbs, because a refusal
+         *     carries a reason and an approval does not - and a pair of routes where only
+         *     one takes a body invites the reason being posted to the wrong one.
+         *
+         *     Approving does not move the project. It makes the processor real, and the
+         *     work then appears where it belongs: a third party's on the DCO Admin's
+         *     queue, an in-house one back with the R&D owner. Nothing about the project
+         *     changed - something was added to it.
+         */
+        post: operations["decide_project_processor_projects__project_uuid__processors__processor_uuid__decision_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2015,6 +2058,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_uuid}/notices/import/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dry run - reports what the document says, writes nothing */
+        post: operations["validate_notice_document_projects__project_uuid__notices_import_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_uuid}/notices/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the notice and its purposes from an uploaded document
+         * @description The purposes arrive as drafts and the notice cannot publish until the DPO
+         *     activates them - see `attach_purpose` for why that is not a deadlock.
+         */
+        post: operations["import_notice_document_projects__project_uuid__notices_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notices/{notice_uuid}/purposes/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate every draft purpose on this notice
+         * @description The DPO's sign-off on purposes that arrived with an uploaded document.
+         *
+         *     One call rather than one per purpose: a notice imported from a template
+         *     carries nine of them, and nine identical approvals is a click count, not a
+         *     review. What is being approved is the set, which is how the DPO reads it.
+         */
+        post: operations["activate_notice_purposes_notices__notice_uuid__purposes_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/links": {
         parameters: {
             query?: never;
@@ -2318,8 +2423,16 @@ export interface paths {
         put?: never;
         /**
          * Generate Export
-         * @description Export A carries no person rows, which is what makes it safe to email.
-         *     Export B carries person rows, and therefore writes one export_line each.
+         * @description One CSV for the project, and it carries person rows.
+         *
+         *     No body: there is one kind of export and it covers the project. What the
+         *     caller may see decides the contents - a collection owner gets the people who
+         *     consented at the sites they run, a DPO gets all of them - so the same
+         *     request returns a different, correct file to each of them.
+         *
+         *     Every person named writes an `export_line`. That is the disclosure record,
+         *     and it is why generating and downloading are separate: re-downloading must
+         *     not claim a second disclosure.
          */
         post: operations["generate_export_projects__project_uuid__exports_post"];
         delete?: never;
@@ -2890,6 +3003,14 @@ export interface components {
             /** Manifest */
             manifest: string;
         };
+        /** Body_import_notice_document_projects__project_uuid__notices_import_post */
+        Body_import_notice_document_projects__project_uuid__notices_import_post: {
+            /**
+             * Document
+             * @description .docx notice template, max 25 MB
+             */
+            document: string;
+        };
         /** Body_validate_import_imports_validate_post */
         Body_validate_import_imports_validate_post: {
             /**
@@ -2901,6 +3022,14 @@ export interface components {
             manifest: string;
             /** Project */
             project?: string | null;
+        };
+        /** Body_validate_notice_document_projects__project_uuid__notices_import_validate_post */
+        Body_validate_notice_document_projects__project_uuid__notices_import_validate_post: {
+            /**
+             * Document
+             * @description .docx notice template, max 25 MB
+             */
+            document: string;
         };
         /** Checklist */
         Checklist: {
@@ -3533,19 +3662,6 @@ export interface components {
             /** Exported By Name */
             exported_by_name?: string | null;
         };
-        /** ExportRequest */
-        ExportRequest: {
-            /**
-             * Type
-             * @description collection_pack or consented_list
-             */
-            type: string;
-            /**
-             * Site
-             * Format: uuid
-             */
-            site: string;
-        };
         /** GrantOut */
         GrantOut: {
             /**
@@ -3678,6 +3794,8 @@ export interface components {
             notice_code: string;
             /** Version */
             version: number;
+            /** Url Path */
+            url_path?: string | null;
             /**
              * Project Uuid
              * Format: uuid
@@ -3729,6 +3847,8 @@ export interface components {
             notice_code: string;
             /** Version */
             version: number;
+            /** Url Path */
+            url_path?: string | null;
         };
         /** LinkStats */
         LinkStats: {
@@ -4257,6 +4377,13 @@ export interface components {
             /** Changed By Name */
             changed_by_name: string;
         };
+        /** ProcessorDecisionIn */
+        ProcessorDecisionIn: {
+            /** Approved */
+            approved: boolean;
+            /** Reason */
+            reason?: string | null;
+        };
         /** ProcessorIn */
         ProcessorIn: {
             /** Legal Name */
@@ -4303,6 +4430,14 @@ export interface components {
             is_in_house: boolean;
             /** Created At */
             created_at: unknown;
+        };
+        /** ProcessorRequestIn */
+        ProcessorRequestIn: {
+            /**
+             * Processor Uuid
+             * Format: uuid
+             */
+            processor_uuid: string;
         };
         /** ProcessorUpdate */
         ProcessorUpdate: {
@@ -7593,6 +7728,81 @@ export interface operations {
             };
         };
     };
+    request_project_processor_projects__project_uuid__processors_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessorRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_project_processor_projects__project_uuid__processors__processor_uuid__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_uuid: string;
+                processor_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessorDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     close_project_projects__project_uuid__close_post: {
         parameters: {
             query?: never;
@@ -8654,6 +8864,109 @@ export interface operations {
             };
         };
     };
+    validate_notice_document_projects__project_uuid__notices_import_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_validate_notice_document_projects__project_uuid__notices_import_validate_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_notice_document_projects__project_uuid__notices_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_notice_document_projects__project_uuid__notices_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_notice_purposes_notices__notice_uuid__purposes_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_uuid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Acknowledged"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_all_links_links_get: {
         parameters: {
             query?: {
@@ -9152,11 +9465,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ExportRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             201: {

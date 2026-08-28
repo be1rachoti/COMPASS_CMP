@@ -105,3 +105,48 @@ export interface PurposeOnNotice extends Purpose {
   overridden_at: Timestamp | null;
   overridden_by_name: string | null;
 }
+
+/**
+ * What a dry run of an uploaded notice document reports.
+ *
+ * Every field here is something the importer read out of the file, so the
+ * screen can show the author what the system understood before anything is
+ * written. `warnings` is where assumptions surface — a default the importer
+ * applied is only acceptable if somebody saw it.
+ */
+export interface NoticeDocumentReport {
+  ok: boolean;
+  project_name: string;
+  language: string;
+  notice_code_in_document: string | null;
+  /** The draft this import would overwrite, if the project has one. */
+  replaces_draft: string | null;
+  rendered_characters: number;
+  rendered_excerpt: string;
+  data_categories: { id: string; name: string }[];
+  purposes: NoticeDocumentPurpose[];
+  /**
+   * Purposes already in the register that read like these. Reported, never
+   * acted on: whether two purposes are the same one is the DPO's call, so the
+   * import always creates and this is how they see the candidates.
+   */
+  possible_duplicates: {
+    document_id: string;
+    name: string;
+    resembles: string;
+    resembles_name: string;
+    similarity: number;
+  }[];
+  warnings: string[];
+}
+
+export interface NoticeDocumentPurpose {
+  document_id: string;
+  name: string;
+  uses: string;
+  data_categories: string[];
+  retention_period: string;
+  lawful_basis: string;
+  /** Whether declining it means not taking part. */
+  is_mandatory: boolean;
+}

@@ -17,10 +17,11 @@ set published. After this the text is immutable; edits create a new version.
 from __future__ import annotations
 
 from datetime import datetime
+from importlib.resources import files
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from pydantic import Field
 
 from cmp.api.dependencies import (
@@ -29,18 +30,25 @@ from cmp.api.dependencies import (
     RequireResource,
     reject_unknown_filters,
 )
+from cmp.core.config import settings
 from cmp.core.enums import NoticeAudience
-from cmp.core.errors import Conflict, NotFound, ValidationFailed
+from cmp.core.errors import BadRequest, Conflict, NotFound, ValidationFailed
 from cmp.core.pagination import PageRequest
 from cmp.db.pool import connection, transaction
 from cmp.db.repositories import notices as repo
 from cmp.db.repositories import projects as project_repo
+from cmp.db.repositories import registry as registry_repo
 from cmp.domain.audit import service as audit
 from cmp.domain.audit.service import Event
+from cmp.domain.notices import importer
 from cmp.domain.notices import service as service
 from cmp.schemas.common import Acknowledged, CodeText, HttpUrl, LongText, Out, Page, Schema
 
 router = APIRouter(tags=["notices"])
+
+#: The template the parser is written against. Versioned in the filename so a
+#: document filled in from an older one is identifiable at a glance.
+TEMPLATE_FILENAME = "DPDP_Consent_Notice_Template_v0_2.docx"
 
 NoticeReader = Annotated[Any, Depends(RequireResource("notice"))]
 
@@ -573,3 +581,145 @@ async def publish(notice_uuid: UUID, principal: RequireDPO) -> dict[str, Any]:
         notice = await _require_notice(conn, str(notice_uuid), principal)
         await service.publish(conn, notice_id=notice["notice_id"], actor_id=principal.user_id)
         return await _require_notice(conn, str(notice_uuid), principal)
+
+
+# --------------------------------------------------------------- from a document
+#
+# A notice is drafted in Word by people whose job is its wording, and the wording
+# is the part that must survive intact. Retyping it into a form is where a notice
+# and the document it was approved as start to differ, so the document itself is
+# what gets uploaded.
+#
+# Two steps, like the manifest importer: a dry run that reports what the file
+# says and writes nothing, then the import. Both run the same parse, so the
+# preview is a rehearsal rather than a second opinion.
+
+
+async def _read_document(document: UploadFile) -> bytes:
+    payload = await document.read()
+    if not payload:
+        raise ValidationFailed("The document is empty", field="document")
+    if len(payload) > settings.max_upload_bytes:
+        raise BadRequest(
+            f"The document exceeds {settings.max_upload_bytes // (1024 * 1024)} MB",
+            code="payload_too_large",
+            field="document",
+        )
+    # A .docx is a zip; the magic bytes are the check that survives a browser
+    # guessing the content type wrong, which they do for Office files.
+    if not payload.startswith(b"PK"):
+        raise ValidationFailed(
+            "That is not a .docx file. Upload the Word notice template - a PDF or a "
+            "scan of one cannot be read.",
+            field="document",
+        )
+    return payload
+
+
+@router.post(
+    "/projects/{project_uuid}/notices/import/validate",
+    summary="Dry run - reports what the document says, writes nothing",
+)
+async def validate_notice_document(
+    project_uuid: UUID,
+    principal: NoticeAuthor,
+    document: Annotated[UploadFile, File(description=".docx notice template, max 25 MB")],
+) -> dict[str, Any]:
+    payload = await _read_document(document)
+    async with connection() as conn:
+        return await importer.preview(
+            conn,
+            project_uuid=str(project_uuid),
+            actor_id=principal.user_id,
+            role=principal.role,
+            payload=payload,
+        )
+
+
+@router.post(
+    "/projects/{project_uuid}/notices/import",
+    response_model=NoticeOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create the notice and its purposes from an uploaded document",
+)
+async def import_notice_document(
+    project_uuid: UUID,
+    principal: NoticeAuthor,
+    document: Annotated[UploadFile, File(description=".docx notice template, max 25 MB")],
+) -> dict[str, Any]:
+    """The purposes arrive as drafts and the notice cannot publish until the DPO
+    activates them - see `attach_purpose` for why that is not a deadlock."""
+    payload = await _read_document(document)
+    async with transaction() as conn:
+        return await importer.commit(
+            conn,
+            project_uuid=str(project_uuid),
+            actor_id=principal.user_id,
+            role=principal.role,
+            payload=payload,
+        )
+
+
+@router.post(
+    "/notices/{notice_uuid}/purposes/activate",
+    response_model=Acknowledged,
+    summary="Activate every draft purpose on this notice",
+)
+async def activate_notice_purposes(notice_uuid: UUID, principal: RequireDPO) -> dict[str, Any]:
+    """The DPO's sign-off on purposes that arrived with an uploaded document.
+
+    One call rather than one per purpose: a notice imported from a template
+    carries nine of them, and nine identical approvals is a click count, not a
+    review. What is being approved is the set, which is how the DPO reads it.
+    """
+    async with transaction() as conn:
+        notice = await _require_notice(conn, str(notice_uuid), principal)
+        attached = await repo.purposes_of(conn, notice["notice_id"])
+        drafted = [p for p in attached if p["status"] == "draft"]
+
+        for purpose in drafted:
+            await registry_repo.set_purpose_status(conn, purpose["purpose_id"], "active")
+            await audit.record(
+                conn,
+                event=Event.PURPOSE_ACTIVATED,
+                entity_type="purpose",
+                entity_id=purpose["purpose_id"],
+                detail={
+                    "code": purpose["purpose_code"],
+                    "via": "notice",
+                    "notice_id": notice["notice_id"],
+                },
+            )
+
+        if not drafted:
+            return {"ok": True, "message": "Every purpose on this notice is already active."}
+        return {
+            "ok": True,
+            "message": f"{len(drafted)} purpose(s) activated. The notice can now be published.",
+        }
+
+
+@router.get(
+    "/notices/import/template",
+    summary="The notice document to fill in",
+)
+async def notice_document_template(principal: NoticeReader) -> Response:
+    """The .docx an R&D User fills in and uploads back.
+
+    Shipped rather than described. The parser needs a header block, a
+    data-category table and a purpose table carrying particular columns, and a
+    person given that as a list of requirements produces a document that fails
+    on the first upload. Handing them the file removes the guessing.
+
+    Not cached: the columns in it are the columns the parser requires, and a
+    stale copy in a proxy is a template that disagrees with the validator.
+    """
+    path = files("cmp.domain.notices.assets") / TEMPLATE_FILENAME
+    return Response(
+        content=path.read_bytes(),
+        media_type=("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        headers={
+            "Content-Disposition": f'attachment; filename="{TEMPLATE_FILENAME}"',
+            "Cache-Control": "no-store",
+        },
+    )

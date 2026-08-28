@@ -7,13 +7,14 @@
  * it is — a change to a published notice is a new version, not an update.
  */
 
-import { apiGet, apiPost, apiPut, http, queryString } from "@/lib/api";
+import { apiDownload, apiGet, apiPost, apiPut, http, queryString } from "@/lib/api";
 import type { ListFilters } from "@/lib/query";
 import type {
   Acknowledged,
   LanguageCode,
   Notice,
   NoticeChecklist,
+  NoticeDocumentReport,
   NoticeLanguage,
   NoticeListRow,
   Page,
@@ -176,4 +177,61 @@ export function overrideNoticePurpose(
   body: PurposeOverride,
 ): Promise<Acknowledged> {
   return apiPut<Acknowledged>(`/notices/${noticeUuid}/purposes/${purposeUuid}`, body);
+}
+
+/* ------------------------------------------------- from an uploaded document */
+
+/**
+ * The multipart body both document endpoints take.
+ *
+ * Built once so the dry run and the import cannot send different payloads — a
+ * rehearsal that differs from the performance rehearses nothing. Content-Type
+ * is left unset on purpose: the browser supplies the multipart boundary, and
+ * the API client drops its JSON default when it sees FormData.
+ */
+function documentBody(file: File): FormData {
+  const body = new FormData();
+  body.append("document", file);
+  return body;
+}
+
+/**
+ * The .docx to fill in.
+ *
+ * Offered rather than described. The parser wants particular tables and
+ * particular columns, and somebody handed that as a list of requirements
+ * produces a document that fails on the first upload.
+ */
+export function downloadNoticeTemplate() {
+  return apiDownload("/notices/import/template");
+}
+
+/** Dry run. Reports what the document says and writes nothing. */
+export async function validateNoticeDocument(
+  projectUuid: Uuid,
+  file: File,
+): Promise<NoticeDocumentReport> {
+  const { data } = await http.post<NoticeDocumentReport>(
+    `/projects/${projectUuid}/notices/import/validate`,
+    documentBody(file),
+  );
+  return data;
+}
+
+export async function importNoticeDocument(projectUuid: Uuid, file: File): Promise<Notice> {
+  const { data } = await http.post<Notice>(
+    `/projects/${projectUuid}/notices/import`,
+    documentBody(file),
+  );
+  return data;
+}
+
+/**
+ * The DPO's sign-off on purposes that arrived with a document.
+ *
+ * One call for the set. An imported notice carries nine of them, and nine
+ * separate approvals is a click count rather than a review.
+ */
+export function activateNoticePurposes(noticeUuid: Uuid): Promise<Acknowledged> {
+  return apiPost<Acknowledged>(`/notices/${noticeUuid}/purposes/activate`, {});
 }

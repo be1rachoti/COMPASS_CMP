@@ -42,9 +42,13 @@ import {
   SiteForm,
   SiteOwner,
 } from "@/features/projects/components";
-import type { SiteWithOwner } from "@/types";
+import type { ConsentLink, SiteWithOwner } from "@/types";
 import { ExportForm } from "@/features/exchange/components/export-form";
-import { NoticeCopyForm, NoticeForm } from "@/features/notices/components";
+import {
+  NoticeCopyForm,
+  NoticeForm,
+  NoticeImportForm,
+} from "@/features/notices/components";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   Alert,
@@ -62,6 +66,7 @@ import {
 import { ProjectProgress, StatusBadge } from "@/components/ui/status";
 import { useLinks } from "@/features/consent";
 import { useNotices } from "@/features/notices";
+import { CopyLinkButton, ReplaceLinkDialog } from "@/features/consent/components";
 import {
   downloadApprovalProof,
   useApprovals,
@@ -78,6 +83,7 @@ type Sheet =
   | { kind: "site" }
   | { kind: "notice" }
   | { kind: "notice-copy" }
+  | { kind: "notice-import" }
   | { kind: "approval" }
   | { kind: "export" }
   | { kind: "agent"; siteUuid: string; siteLabel: string };
@@ -96,10 +102,18 @@ export default function ProjectDetailPage() {
   const sites = useSites(uuid);
   const links = useLinks(uuid);
 
+  /** The live link for a site, if it has one. At most one by design. */
+  const activeLinkFor = React.useCallback(
+    (siteUuid: string) =>
+      (links.data ?? []).find((l) => l.site_uuid === siteUuid && l.status === "active"),
+    [links.data],
+  );
+
   // Above the early returns: a hook after one runs in a different order on
   // the render that takes the branch, which React refuses.
   const [assigning, setAssigning] = React.useState<SiteWithOwner | null>(null);
   const [namingDco, setNamingDco] = React.useState<SiteWithOwner | null>(null);
+  const [replacing, setReplacing] = React.useState<ConsentLink | null>(null);
 
   if (project.isLoading) return <DetailSkeleton />;
 
@@ -185,6 +199,18 @@ export default function ProjectDetailPage() {
             )}
             {canAuthorNotice && (
               <>
+                {/* First of the three because it is how a notice actually
+                    arrives. The wording is drafted in Word by the people whose
+                    job that is; typing it in again is where the notice and the
+                    document it was approved as start to differ. */}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setSheet({ kind: "notice-import" })}
+                >
+                  <Upload className="size-4" />
+                  Upload a notice document
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => setSheet({ kind: "notice" })}>
                   <ScrollText className="size-4" />
                   New notice
@@ -248,8 +274,23 @@ export default function ProjectDetailPage() {
           />
 
           <Card>
-            <CardHeader>
+            {/* The controls sit here as well as in the page header. A person
+                looking for how to add a notice looks at the card that says
+                there is not one, not at a row of buttons above the title — the
+                approvals card has worked that way all along, and this one was
+                the odd exception. */}
+            <CardHeader className="flex items-center justify-between">
               <CardTitle>Notices</CardTitle>
+              {canAuthorNotice && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSheet({ kind: "notice-import" })}
+                >
+                  <Upload className="size-4" />
+                  Upload
+                </Button>
+              )}
             </CardHeader>
             {notices.isLoading ? (
               <CardBody>
@@ -258,7 +299,34 @@ export default function ProjectDetailPage() {
             ) : !notices.data?.length ? (
               <EmptyState
                 title="No notice yet"
-                description="A project cannot leave draft without a notice carrying at least one purpose and every Rule 3 element."
+                description={
+                  canAuthorNotice
+                    ? "Upload the filled-in notice document and its purposes are created with it. A project cannot leave draft without a notice carrying at least one purpose and every Rule 3 element."
+                    : "A project cannot leave draft without a notice carrying at least one purpose and every Rule 3 element."
+                }
+                action={
+                  canAuthorNotice ? (
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setSheet({ kind: "notice-import" })}
+                      >
+                        <Upload className="size-4" />
+                        Upload a notice document
+                      </Button>
+                      {/* Second, and quieter: writing one by hand is the
+                          fallback for when there is no document yet. */}
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setSheet({ kind: "notice" })}
+                      >
+                        Write one instead
+                      </Button>
+                    </div>
+                  ) : undefined
+                }
               />
             ) : (
               <ul className="divide-y divide-border">
@@ -377,10 +445,42 @@ export default function ProjectDetailPage() {
                         </>
                       )}
                       {/* A link may only exist for an approved project, so the
-                          control is absent until it is. */}
+                          control is absent until it is.
+
+                          Which control depends on whether one already exists.
+                          Minting a second for a site that has a live one leaves
+                          two working URLs and only one of them tracked — the
+                          Links page has always guarded that, and this page did
+                          not.
+
+                          The token is shown once at mint and never stored, so
+                          "I need the URL again" has exactly one honest answer:
+                          replace it. The button says so rather than leaving
+                          somebody hunting for a copy affordance that cannot
+                          exist. */}
                       {canManageSites &&
                         site.status === "active" &&
-                        p.project_status === "approved" && (
+                        p.project_status === "approved" &&
+                        (activeLinkFor(site.site_uuid) ? (
+                          <>
+                            {/* Copy without leaving the project. Falls back to
+                                "URL not kept" for links minted before they were
+                                recoverable, which offers the replace instead. */}
+                            <CopyLinkButton
+                              link={activeLinkFor(site.site_uuid)!}
+                              onReplace={() => setReplacing(activeLinkFor(site.site_uuid)!)}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setReplacing(activeLinkFor(site.site_uuid)!)}
+                              title="Revoke this link and issue a fresh one. Use it if the URL has circulated further than intended."
+                            >
+                              <Link2 className="size-4" />
+                              Replace link
+                            </Button>
+                          </>
+                        ) : (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -395,7 +495,7 @@ export default function ProjectDetailPage() {
                             <Link2 className="size-4" />
                             Create link
                           </Button>
-                        )}
+                        ))}
                     </div>
                   </li>
                 ))}
@@ -568,6 +668,16 @@ export default function ProjectDetailPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={sheet?.kind === "notice-import"} onOpenChange={(o) => !o && close()}>
+        <DialogContent
+          title="Upload a notice document"
+          description="The filled-in .docx template. Its purpose table becomes the notice's purposes, which the DPO then activates."
+          size="lg"
+        >
+          <NoticeImportForm projectUuid={uuid} onDone={close} />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={sheet?.kind === "notice-copy"} onOpenChange={(o) => !o && close()}>
         <DialogContent
           title="Use an existing notice"
@@ -608,6 +718,7 @@ export default function ProjectDetailPage() {
         onClose={() => setAssigning(null)}
       />
       <AssignSiteDcoDialog site={namingDco} onClose={() => setNamingDco(null)} />
+      <ReplaceLinkDialog link={replacing} onClose={() => setReplacing(null)} />
     </>
   );
 }
