@@ -3,28 +3,48 @@ name = "cmp-backend"
 version = "0.1.0"
 description = "Consent Management Platform — DPDP Act 2023 / DPDP Rules 2025 consent backend"
 requires-python = ">=3.12,<3.13"
+# Every constraint is a floor at the version the suite actually runs against,
+# and a cap at the next release that is allowed to break us.
+#
+# The floors used to say things like `fastapi>=0.121` while the lock resolved
+# 0.141.1 - a claim to support twenty minor versions nobody had ever run. A
+# floor that has not been tested is not a floor, it is a guess.
+#
+# The caps matter at a different moment from the lock. `uv.lock` decides what
+# gets installed and `uv sync --frozen` in the Dockerfile means production
+# installs exactly that. These bounds decide what a *re-lock* may pull in - so
+# `uv lock --upgrade` cannot quietly cross a breaking boundary and hand the next
+# deploy a library the suite has never seen.
+#
+# Where the cap sits depends on what each project promises. A 0.x project can
+# break on a minor, so those are capped at the next minor; one past 1.0
+# following semver is capped at the next major.
 dependencies = [
-    "alembic>=1.17",
-    "argon2-cffi>=25.1",
-    "celery[redis]>=5.5",
-    "cryptography>=50.0.0",
-    "email-validator>=2.3",
-    "fastapi[standard]>=0.121",
-    "gunicorn>=23.0",
-    "httpx>=0.28",
-    "orjson>=3.11",
-    "prometheus-fastapi-instrumentator>=7.1",
-    "psycopg[binary,pool]>=3.2",
-    "pydantic>=2.12",
-    "pydantic-settings>=2.12",
-    "pyjwt[crypto]>=2.11",
-    "python-docx>=1.2.0",
-    "python-multipart>=0.0.20",
-    "redis>=6.0",
-    "slowapi>=0.1.9",
-    "sqlalchemy>=2.0",
-    "structlog>=25.4",
-    "uvicorn[standard]>=0.40",
+    "alembic>=1.19.1,<2",
+    "argon2-cffi>=25.1,<26",
+    "celery[redis]>=5.6.3,<6",
+    "cryptography>=50.0,<51",
+    "email-validator>=2.3,<3",
+    # 0.x: the minor is the breaking unit, and pinning it is FastAPI's own
+    # guidance. Moving to 0.142 is a deliberate edit followed by a test run.
+    "fastapi[standard]>=0.141.1,<0.142.0",
+    "gunicorn>=26.1,<27",
+    "httpx>=0.28.1,<0.29.0",
+    "orjson>=3.12,<4",
+    "prometheus-fastapi-instrumentator>=8.1,<9",
+    "psycopg[binary,pool]>=3.3.4,<4",
+    "pydantic>=2.13.4,<3",
+    "pydantic-settings>=2.15,<3",
+    "pyjwt[crypto]>=2.13,<3",
+    "python-docx>=1.2,<2",
+    "python-multipart>=0.0.32,<0.1.0",
+    "redis>=6.4,<7",
+    "slowapi>=0.1.10,<0.2.0",
+    # Alembic requires it. No application code imports SQLAlchemy - every query
+    # is written by hand against psycopg.
+    "sqlalchemy>=2.0,<3",
+    "structlog>=26.1,<27",
+    "uvicorn[standard]>=0.52.4,<0.53.0",
 ]
 
 [dependency-groups]
