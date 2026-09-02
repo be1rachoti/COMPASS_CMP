@@ -265,12 +265,19 @@ function StaffForm() {
 
 function SubjectForm() {
   const hydrated = useHydrated();
+  const params = useSearchParams();
   const [sent, setSent] = React.useState(false);
   const [contact, setContact] = React.useState("");
 
+  // Prefilled when arriving from sign-up, which sends the address it just
+  // registered. Retyping an address you entered one screen ago is the kind of
+  // friction that loses people between registering and ever signing in.
+  //
+  // Only an address is accepted, and it only ever populates a form field — it
+  // authorises nothing, and the code still has to arrive at that address.
   const form = useForm<OtpRequestForm>({
     resolver: zodResolver(otpRequestSchema),
-    defaultValues: { contact: "" },
+    defaultValues: { contact: params.get("contact") ?? "" },
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -330,6 +337,16 @@ function SubjectForm() {
       >
         Send me a code
       </Button>
+
+      {/* On the data-subject panel only. Staff accounts are issued by an
+          administrator, so offering "create an account" beside the password
+          form would invite people to try something that cannot work. */}
+      <p className="pt-1 text-center text-sm text-text-muted">
+        Never registered with us?{" "}
+        <Link href="/sign-up" className="font-medium text-accent-text hover:underline">
+          Create an account
+        </Link>
+      </p>
     </form>
   );
 }

@@ -36,6 +36,31 @@ export function signInWithPassword(body: PasswordCredentials): Promise<LoginResp
 }
 
 /** Ask for a one-time code. Answers the same way whether the contact is known. */
+export interface RegistrationDetails {
+  full_name: string;
+  email: string;
+  /** ISO date, YYYY-MM-DD. */
+  dob: string;
+  mobile?: string | null;
+}
+
+/**
+ * Data-principal self-registration.
+ *
+ * Only this role can be created this way — the server writes the role itself
+ * and there is no field here to carry one, which is what stops a public form
+ * from minting staff accounts.
+ *
+ * The response is identical whether or not the address already has an account.
+ * A sign-up that said "already registered" would let anyone test whether a
+ * person is on a consent register, which for a study is close to asking whether
+ * they took part. Someone who is already registered receives a sign-in code,
+ * which is what they needed anyway.
+ */
+export function register(body: RegistrationDetails): Promise<Acknowledged> {
+  return apiPost<Acknowledged>("/auth/register", body);
+}
+
 export function requestOtp(body: { contact: string }): Promise<Acknowledged> {
   return apiPost<Acknowledged>("/auth/otp/request", body);
 }

@@ -7,6 +7,7 @@ because no query here accepts a subject identifier.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -37,12 +38,21 @@ class MeProfile(Out):
     organization_id: str | None
     person_type: str | None
     status: str
+    dob: date | None
+    #: Derived from `dob` by the database, so every reader gets the same answer
+    #: on the same day. `None` means the date of birth is unknown - which is not
+    #: the same as adult, and must not be rendered as one.
+    is_minor: bool | None
     created_at: Any
 
 
 class UpdateMe(Schema):
     full_name: ShortText | None = None
     mobile: Mobile | None = None
+    #: Editable because accounts created through a consent link never had one
+    #: asked for, and the alternative is a data principal who cannot correct a
+    #: field that decides whether section 9 applies to them.
+    dob: date | None = None
 
 
 class PersonTypeChange(Schema):
@@ -92,6 +102,7 @@ async def update_me(body: UpdateMe, principal: RequireDataSubject) -> dict[str, 
             full_name=body.full_name,
             mobile=body.mobile,
             organization_id=None,
+            dob=body.dob.isoformat() if body.dob else None,
         )
         await audit.record(
             conn,

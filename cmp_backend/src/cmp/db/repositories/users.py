@@ -18,7 +18,12 @@ from cmp.db.sql import Conn, Row, execute, fetch_all, fetch_one, keyset_clause, 
 # never be added: a SELECT * here is one refactor away from a response body.
 PUBLIC_COLUMNS = """
   u.uuid, u.username, u.full_name, u.email, u.mobile, u.organization_id,
-  u.role, u.person_type, u.status, u.created_at, u.updated_at
+  u.role, u.person_type, u.status, u.dob,
+  -- Derived in SQL rather than in Python, because more than one caller asks and
+  -- the answer changes on a birthday without the row being written to. NULL
+  -- when the date of birth is unknown, which is not the same as adult.
+  cmp_is_minor(u.dob) AS is_minor,
+  u.created_at, u.updated_at
 """
 
 
@@ -95,16 +100,22 @@ async def create(
     status: str = "pending",
     password_hash: str | None = None,
     registered_via_link_id: int | None = None,
+    #: Section 9 makes this load-bearing for a data subject: it decides whether
+    #: the account is a child's. Optional here because a consent link does not
+    #: ask, and an assumed date would be worse than an absent one.
+    dob: str | None = None,
 ) -> Row:
     row = await fetch_one(
         conn,
         """
         INSERT INTO auth_user (username, full_name, email, mobile, organization_id,
                                role, person_type, status, password_hash,
-                               registered_via_link_id)
-        VALUES (%s, %s, %s, %s, %s, %s::user_role, %s::person_type, %s::user_status, %s, %s)
+                               registered_via_link_id, dob)
+        VALUES (%s, %s, %s, %s, %s, %s::user_role, %s::person_type, %s::user_status, %s, %s,
+                %s::date)
         RETURNING id, uuid, username, full_name, email, mobile, organization_id,
-                  role, person_type, status, created_at, updated_at
+                  role, person_type, status, dob, cmp_is_minor(dob) AS is_minor,
+                  created_at, updated_at
         """,
         (
             username,
@@ -117,6 +128,7 @@ async def create(
             status,
             password_hash,
             registered_via_link_id,
+            dob,
         ),
     )
     assert row is not None
@@ -130,6 +142,7 @@ async def update_profile(
     full_name: str | None = None,
     mobile: str | None = None,
     organization_id: str | None = None,
+    dob: str | None = None,
 ) -> Row:
     """Partial update. COALESCE keeps an omitted field unchanged rather than nulling it."""
     row = await fetch_one(
@@ -138,12 +151,14 @@ async def update_profile(
         UPDATE auth_user
            SET full_name       = COALESCE(%s, full_name),
                mobile          = COALESCE(%s, mobile),
-               organization_id = COALESCE(%s, organization_id)
+               organization_id = COALESCE(%s, organization_id),
+               dob             = COALESCE(%s::date, dob)
          WHERE id = %s
         RETURNING id, uuid, username, full_name, email, mobile, organization_id,
-                  role, person_type, status, created_at, updated_at
+                  role, person_type, status, dob, cmp_is_minor(dob) AS is_minor,
+                  created_at, updated_at
         """,
-        (full_name, mobile, organization_id, user_id),
+        (full_name, mobile, organization_id, dob, user_id),
     )
     assert row is not None
     return row

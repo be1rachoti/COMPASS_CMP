@@ -7,12 +7,12 @@ Staff sign-in is two-step where MFA applies: `/auth/login` returns
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Response, status
-from pydantic import EmailStr, Field
+from pydantic import EmailStr, Field, field_validator
 
 from cmp.api.dependencies import (
     CurrentUser,
@@ -48,6 +48,36 @@ class MfaVerifyRequest(Schema):
     code: OtpCode
 
 
+class RegisterBody(Schema):
+    """Self-registration. Note what is *not* here: a role.
+
+    The role is written by the service as `data_subject`. Accepting one from an
+    unauthenticated body is how a sign-up form becomes a way to mint a DPO.
+    """
+
+    full_name: Annotated[str, Field(min_length=2, max_length=120)]
+    email: EmailStr
+    dob: Annotated[date, Field(description="Date of birth, YYYY-MM-DD")]
+    mobile: Annotated[str | None, Field(default=None, max_length=20)] = None
+
+    @field_validator("dob")
+    @classmethod
+    def _plausible(cls, value: date) -> date:
+        """The same window the database CHECK enforces, refused earlier.
+
+        Rejected here as well as there so the person gets a message naming the
+        field, rather than a constraint violation naming a constraint.
+        """
+        # UTC rather than the server's local date: "is this in the past" must
+        # not depend on which side of midnight the machine happens to be.
+        today = datetime.now(UTC).date()
+        if value >= today:
+            raise ValueError("Date of birth must be in the past.")
+        if value.year < 1900:
+            raise ValueError("Date of birth is not plausible.")
+        return value
+
+
 class OtpRequestBody(Schema):
     contact: Annotated[
         str, Field(min_length=3, max_length=255, description="Registered email or mobile")
@@ -66,6 +96,8 @@ class MeResponse(Out):
     role: str
     person_type: str | None
     status: str
+    dob: date | None = None
+    is_minor: bool | None = None
     mfa_verified: bool
     session_expires_at: datetime
     nav: list[str]
@@ -151,6 +183,35 @@ async def mfa_resend(principal: PartialUser) -> dict[str, Any]:
             raise Unauthenticated("Sign in to continue")
         await auth_service.resend_mfa(conn, user_uuid=principal.uuid, email=user["email"])
     return {"ok": True, "message": "A new code has been sent."}
+
+
+@router.post(
+    "/register",
+    response_model=Acknowledged,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Data-subject self-registration",
+)
+async def register(body: RegisterBody) -> dict[str, Any]:
+    """Create a data-principal account and send a sign-in code.
+
+    202 rather than 201: the account is not usable until the code is verified,
+    and returning 201 Created would tell an unauthenticated caller that this
+    contact was new - which is the one thing the identical response below is
+    there to withhold.
+
+    Staff accounts are not created this way. An administrator invites them, and
+    this endpoint writes the role itself rather than reading it.
+    """
+    async with transaction() as conn:
+        await auth_service.register_data_subject(
+            conn,
+            full_name=body.full_name,
+            email=body.email,
+            dob=body.dob.isoformat(),
+            mobile=body.mobile,
+        )
+    # Identical whether the contact was new or already registered.
+    return {"ok": True, "message": "Check your email for a sign-in code."}
 
 
 @router.post("/otp/request", response_model=Acknowledged, summary="Data-subject sign-in code")

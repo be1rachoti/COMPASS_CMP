@@ -72,6 +72,11 @@ export function makeMe(overrides: Partial<Me> = {}): Me {
     role,
     person_type: null,
     status: "active",
+    // Unknown by default, which is the honest default: most accounts in this
+    // system were created through a consent link that never asked. A test that
+    // needs a child or an adult says so explicitly.
+    dob: null,
+    is_minor: null,
     mfa_verified: true,
     // An hour out, so a test that does not care about expiry never trips the
     // session warning. Tests that do care set this deliberately.

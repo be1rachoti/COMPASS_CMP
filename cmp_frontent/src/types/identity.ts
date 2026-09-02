@@ -16,6 +16,13 @@ export interface Me {
   role: Role;
   person_type: PersonType | null;
   status: UserStatus;
+  /** ISO date. Null on accounts registered through a consent link, which never
+   *  asked for one. */
+  dob: string | null;
+  /** Derived by the server from `dob`. **Null means unknown, not adult** — the
+   *  distinction matters, because section 9 requires a parent's consent for a
+   *  child and "we did not ask" is not "we checked". */
+  is_minor: boolean | null;
   mfa_verified: boolean;
   session_expires_at: Timestamp;
   /** What this role may navigate to. Rendered from here, not from a local copy

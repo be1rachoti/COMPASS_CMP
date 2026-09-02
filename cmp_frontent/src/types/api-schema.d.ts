@@ -146,6 +146,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Data-subject self-registration
+         * @description Create a data-principal account and send a sign-in code.
+         *
+         *     202 rather than 201: the account is not usable until the code is verified,
+         *     and returning 201 Created would tell an unauthenticated caller that this
+         *     contact was new - which is the one thing the identical response below is
+         *     there to withhold.
+         *
+         *     Staff accounts are not created this way. An administrator invites them, and
+         *     this endpoint writes the role itself rather than reading it.
+         */
+        post: operations["register_auth_register_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/otp/request": {
         parameters: {
             query?: never;
@@ -2120,6 +2148,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notices/import/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The notice document to fill in
+         * @description The .docx an R&D User fills in and uploads back.
+         *
+         *     Shipped rather than described. The parser needs a header block, a
+         *     data-category table and a purpose table carrying particular columns, and a
+         *     person given that as a list of requirements produces a document that fails
+         *     on the first upload. Handing them the file removes the guessing.
+         *
+         *     Not cached: the columns in it are the columns the parser requires, and a
+         *     stale copy in a proxy is a template that disagrees with the validator.
+         */
+        get: operations["notice_document_template_notices_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/links": {
         parameters: {
             query?: never;
@@ -3926,6 +3982,10 @@ export interface components {
             person_type: string | null;
             /** Status */
             status: string;
+            /** Dob */
+            dob: string | null;
+            /** Is Minor */
+            is_minor: boolean | null;
             /** Created At */
             created_at: unknown;
         };
@@ -3946,6 +4006,10 @@ export interface components {
             person_type: string | null;
             /** Status */
             status: string;
+            /** Dob */
+            dob?: string | null;
+            /** Is Minor */
+            is_minor?: boolean | null;
             /** Mfa Verified */
             mfa_verified: boolean;
             /**
@@ -4715,22 +4779,6 @@ export interface components {
             /** Detail */
             detail?: string | null;
         };
-        /** RegisterBody */
-        RegisterBody: {
-            /** Full Name */
-            full_name: string;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Mobile */
-            mobile?: string | null;
-            /** Organization Id */
-            organization_id?: string | null;
-            /** Person Type */
-            person_type?: string | null;
-        };
         /** ResetConfirm */
         ResetConfirm: {
             /**
@@ -4974,6 +5022,8 @@ export interface components {
             full_name?: string | null;
             /** Mobile */
             mobile?: string | null;
+            /** Dob */
+            dob?: string | null;
         };
         /** UpdateUser */
         UpdateUser: {
@@ -5062,6 +5112,46 @@ export interface components {
              * @default false
              */
             all: boolean;
+        };
+        /** RegisterBody */
+        cmp__api__routers__public__consent__RegisterBody: {
+            /** Full Name */
+            full_name: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Mobile */
+            mobile?: string | null;
+            /** Organization Id */
+            organization_id?: string | null;
+            /** Person Type */
+            person_type?: string | null;
+        };
+        /**
+         * RegisterBody
+         * @description Self-registration. Note what is *not* here: a role.
+         *
+         *     The role is written by the service as `data_subject`. Accepting one from an
+         *     unauthenticated body is how a sign-up form becomes a way to mint a DPO.
+         */
+        cmp__api__routers__v1__auth__RegisterBody: {
+            /** Full Name */
+            full_name: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /**
+             * Dob
+             * Format: date
+             * @description Date of birth, YYYY-MM-DD
+             */
+            dob: string;
+            /** Mobile */
+            mobile?: string | null;
         };
     };
     responses: never;
@@ -5262,6 +5352,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Acknowledged"];
+                };
+            };
+        };
+    };
+    register_auth_register_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["cmp__api__routers__v1__auth__RegisterBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Acknowledged"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5562,7 +5685,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RegisterBody"];
+                "application/json": components["schemas"]["cmp__api__routers__public__consent__RegisterBody"];
             };
         };
         responses: {
@@ -8963,6 +9086,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    notice_document_template_notices_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

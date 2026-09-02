@@ -14,6 +14,7 @@ import * as React from "react";
 import { PageHeader } from "@/components/layout/app-shell";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   CardBody,
@@ -29,7 +30,7 @@ import { StatusBadge } from "@/components/ui/status";
 import { changePassword, revokeSession } from "@/features/auth";
 import { ApiError } from "@/lib/errors";
 import { useSessions } from "@/features/account";
-import { formatDateTime, formatRelative } from "@/lib/format";
+import { formatDate, formatDateTime, formatRelative } from "@/lib/format";
 import { useAuth, useToast } from "@/providers";
 
 export default function AccountPage() {
@@ -97,6 +98,30 @@ export default function AccountPage() {
               <DescriptionItem term="Status">
                 <StatusBadge kind="user" value={me.status} />
               </DescriptionItem>
+              {/* Shown only to the people it applies to. A date of birth on a
+                  DPO's account page is a field nobody asked for and nobody uses;
+                  on a data principal's it is the input to whether consent for
+                  them has to come from a parent. */}
+              {me.role === "data_subject" && (
+                <DescriptionItem term="Date of birth">
+                  {me.dob ? (
+                    <span className="flex flex-wrap items-center gap-2">
+                      {formatDate(me.dob)}
+                      {me.is_minor && (
+                        <Badge tone="warning">
+                          Under 18 — consent must come from a parent or guardian
+                        </Badge>
+                      )}
+                    </span>
+                  ) : (
+                    // Absent rather than assumed. Saying "—" and nothing else
+                    // would let an unanswered question read as an answered one.
+                    <span className="text-text-muted">
+                      Not recorded. Your account predates our asking.
+                    </span>
+                  )}
+                </DescriptionItem>
+              )}
               <DescriptionItem term="Session expires">
                 {formatDateTime(me.session_expires_at)}
               </DescriptionItem>

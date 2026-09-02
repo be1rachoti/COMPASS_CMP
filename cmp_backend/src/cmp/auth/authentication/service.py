@@ -395,6 +395,10 @@ async def me_payload(conn: Conn, *, user_id: int, session: sessions.Session) -> 
         "role": user["role"],
         "person_type": user["person_type"],
         "status": user["status"],
+        # Carried on first paint so the interface does not need a second call to
+        # find out whether it is dealing with a child's account.
+        "dob": user["dob"],
+        "is_minor": user["is_minor"],
         "mfa_verified": session.mfa_verified,
         "session_expires_at": datetime.fromtimestamp(session.expires_at, tz=UTC),
         "nav": nav_for(user["role"]),
@@ -403,3 +407,80 @@ async def me_payload(conn: Conn, *, user_id: int, session: sessions.Session) -> 
 
 async def _user_by_uuid_id(conn: Conn, user_uuid: str) -> dict[str, Any] | None:
     return await user_repo.by_uuid(conn, user_uuid)
+
+
+async def register_data_subject(
+    conn: Conn,
+    *,
+    full_name: str,
+    email: str,
+    dob: str,
+    mobile: str | None = None,
+) -> None:
+    """Self-registration, for a data principal and nobody else.
+
+    The role is written here as a literal rather than taken from the request.
+    An unauthenticated caller choosing their own role is how an open sign-up form
+    becomes a privilege escalation, and no amount of validation downstream is as
+    reliable as never reading the field.
+
+    **The response is identical whether or not the contact is already
+    registered.** Sign-up is unauthenticated, so a form that says "this email is
+    taken" is a membership oracle for "who is a data principal on this
+    platform" - which, for a consent register, is close to "who is in this
+    study". An address that already has an account is sent a sign-in code
+    instead, which is what that person actually needed.
+
+    Date of birth is required here, unlike on accounts created through a consent
+    link. Section 9 makes it the input to whether this is a child's account, and
+    a self-registration is the one moment the platform can ask.
+    """
+    await ratelimit.enforce(
+        "subject_register",
+        email.lower(),
+        limit=settings.otp_requests_per_contact_per_hour,
+        window_s=3600,
+        message="Too many registration attempts for this contact.",
+    )
+
+    from cmp.tasks.authentication import send_login_code
+    from cmp.tasks.dispatch import dispatch_required
+
+    existing = await user_repo.by_contact(conn, email)
+    if existing:
+        # Not an error, and not a different code path the caller can time. They
+        # get a sign-in code, exactly as if they had asked for one.
+        if existing["status"] in ("active", "pending"):
+            issued = await otp.issue(otp.Scope.SUBJECT_LOGIN, str(existing["uuid"]))
+            dispatch_required(send_login_code, str(existing["uuid"]), email, issued.code)
+        log.info("auth.register_existing_contact")
+        return
+
+    user = await user_repo.create(
+        conn,
+        full_name=full_name,
+        email=email,
+        mobile=mobile,
+        role=Role.DATA_SUBJECT.value,
+        person_type="external",
+        status="pending",
+        dob=dob,
+    )
+    await audit.record(
+        conn,
+        event=Event.USER_CREATED,
+        entity_type="auth_user",
+        entity_id=user["id"],
+        detail={
+            "role": Role.DATA_SUBJECT.value,
+            "via": "self_registration",
+            # The date itself is personal data and does not belong in a log that
+            # every DPO can read. Whether it made them a child is the fact the
+            # trail needs, and it is the fact section 9 turns on.
+            "is_minor": user["is_minor"],
+        },
+    )
+
+    issued = await otp.issue(otp.Scope.SUBJECT_LOGIN, str(user["uuid"]))
+    dispatch_required(send_login_code, str(user["uuid"]), email, issued.code)
+    log.info("auth.registered", is_minor=user["is_minor"])

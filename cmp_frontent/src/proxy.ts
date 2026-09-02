@@ -29,8 +29,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-/** Routes that must be reachable with no session at all. */
-const PUBLIC_PREFIXES = ["/sign-in", "/rights", "/c/"] as const;
+/** Routes that must be reachable with no session at all.
+ *
+ * `/sign-up` belongs here for the obvious reason and one less obvious: a person
+ * registering has no session by definition, so gating it behind one redirects
+ * them to sign in, which is the thing they cannot yet do.
+ */
+const PUBLIC_PREFIXES = ["/sign-in", "/sign-up", "/rights", "/c/"] as const;
 
 /** Static assets and internals — never redirect, never CSP-nonce. */
 const SKIP_PREFIXES = ["/_next", "/api", "/favicon", "/icon", "/apple-icon", "/robots", "/sitemap"] as const;
