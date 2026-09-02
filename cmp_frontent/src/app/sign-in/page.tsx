@@ -51,11 +51,23 @@ export default function SignInPage() {
       subtitle="Staff sign in with a password. If you consented to a project, choose
         “Data subject” and we will send you a one-time code instead."
       footer={
-        <p className="text-center text-xs text-text-subtle">
-          <Link href="/rights" className="underline underline-offset-2 hover:text-text-muted">
-            Your rights and how to exercise them
-          </Link>
-        </p>
+        <div className="space-y-3">
+          {/* Outside both tab panels on purpose. This lived inside the
+              data-subject panel and was therefore invisible: "staff" is the
+              default tab, so somebody arriving to register saw a password form
+              and no way to create anything. */}
+          <p className="text-center text-sm text-text-muted">
+            Never registered with us?{" "}
+            <Link href="/sign-up" className="font-medium text-accent-text hover:underline">
+              Create an account
+            </Link>
+          </p>
+          <p className="text-center text-xs text-text-subtle">
+            <Link href="/rights" className="underline underline-offset-2 hover:text-text-muted">
+              Your rights and how to exercise them
+            </Link>
+          </p>
+        </div>
       }
     >
       <div
@@ -338,15 +350,6 @@ function SubjectForm() {
         Send me a code
       </Button>
 
-      {/* On the data-subject panel only. Staff accounts are issued by an
-          administrator, so offering "create an account" beside the password
-          form would invite people to try something that cannot work. */}
-      <p className="pt-1 text-center text-sm text-text-muted">
-        Never registered with us?{" "}
-        <Link href="/sign-up" className="font-medium text-accent-text hover:underline">
-          Create an account
-        </Link>
-      </p>
     </form>
   );
 }
